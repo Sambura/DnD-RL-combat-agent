@@ -1,0 +1,50 @@
+from .utils import manhattan_distance
+
+class Action:
+    """
+    Abstract base class for all actions
+    """
+    def __init__(self, name):
+        self.name = name
+
+    def invoke(self, *args):
+        raise RuntimeError('Empty aciton invoked')
+
+class SwordAttack(Action):
+    def __init__(self, attack_damage, range=1, name='Sword attack'):
+        super().__init__(name)
+        self.attack_damage = attack_damage
+        self.range = range
+
+    def invoke(self, game, source_unit, target_unit, skip_illegal):
+        unit_position = game.get_unit_position(source_unit)
+        if not self.check_action_legal(game, unit_position, source_unit, target_unit):
+            if not skip_illegal: raise RuntimeError('Too far to attack')
+            return None
+        
+        target_unit.take_damage(self.attack_damage)
+
+    def check_action_legal(self, game, new_position, source_unit, target_unit):
+        if source_unit is target_unit: return False
+        if target_unit is None: return False
+        
+        target_pos = game.get_unit_position(target_unit)
+        if manhattan_distance(target_pos, new_position) > self.range:
+             return False
+        return True
+    
+class ActionInstance:
+    """
+    An action along with the required parameters. Used to make a move
+    """
+    def __init__(self, action = None, **kwargs):
+        self.action = action
+        self.kwargs = kwargs
+
+    def check_action_legal(self, game, new_position): 
+        if self.action is None: return True
+        return self.action.check_action_legal(game, new_position, **self.kwargs)
+    
+    def invoke(self, game, skip_illegal):
+        if self.action is None: return None
+        return self.action.invoke(game, **self.kwargs, skip_illegal=skip_illegal)
