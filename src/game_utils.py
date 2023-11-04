@@ -2,7 +2,7 @@ from .utils import to_tuple, get_random_coords
 from .game_board import DnDBoard
 from .units import Unit
 
-def print_game(game, unit_to_color):
+def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
     COLORS = {
         "Red": "\033[91m",
         "Green": "\033[92m",

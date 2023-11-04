@@ -5,15 +5,27 @@ import numpy as np
 import random
 from .actions import ActionInstance
 from .utils import to_tuple
+import pickle
 import torch
 import os
 
+def bytes_to_human_readable(bytes):
+    if bytes < 1024:
+        return f'{bytes} bytes'
+    elif bytes < 1024**2:
+        return f'{bytes / 1024:.2f} KB'
+    elif bytes < 1024**3:
+        return f'{bytes / (1024**2):.2f} MB'
+    elif bytes < 1024**4:
+        return f'{bytes / (1024**3):.2f} GB'
+    else:
+        return f'{bytes / (1024**4):.2f} TB'
+
 class DnDAgent():
-    def __init__(self, 
-                 game: DnDBoard, 
+    def __init__(self,
                  board_shape: tuple[int, int], 
-                 in_channels: int=6, 
-                 out_actions: int=1, 
+                 in_channels: int=7, 
+                 out_actions: int=2, 
                  lr: float=0.001, 
                  epsilon: float=0.99, 
                  min_epsilon: float=0.01, 
@@ -22,7 +34,6 @@ class DnDAgent():
                  memory_capacity: int=100000, 
                  batch_size: int=128) -> None:
         """"""
-        self.game = game
         self.in_channels = in_channels
         self.out_channels = out_actions
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -45,18 +56,30 @@ class DnDAgent():
         self.game_over_memory = np.zeros(memory_capacity, dtype=np.bool_)
         self.memory_bound = 0
     
+    def estimate_memory_size_self(self, return_result=False):
+        return DnDAgent.estimate_memory_size(self.state_memory.shape[2:], self.in_channels, self.out_channels, self.memory_capacity, return_result)
+
+    def estimate_memory_size(board_shape: tuple[int, int], in_channels: int, out_actions: int, memory_capacity: int=100000, return_result=False) -> int:
+        states_size = np.prod((memory_capacity, in_channels, *board_shape))
+        actions_size = np.prod((memory_capacity, out_actions, 2))
+
+        #        states + new_states +    actions +      game_overs +        rewards
+        memory_size = states_size * 2 + actions_size + memory_capacity + memory_capacity * 4
+
+        if return_result: return memory_size
+        print(bytes_to_human_readable(memory_size))
+
     def predict(self, state):
         return self.model(torch.tensor(state).to(self.device).unsqueeze(0)).detach().cpu().numpy()[0]
-
-    def choose_action(self, state = None):
-        if state is None: state = self.game.observe_board()
-        current_unit, player_id = self.game.get_current_unit()
+    
+    def choose_action(self, game, state):
+        current_unit, player_id = game.get_current_unit()
 
         if random.random() < self.epsilon:
-            legal_moves = self.game.get_legal_positions()
+            legal_moves = game.get_legal_positions()
             new_pos = random.choice(list(zip(*np.where(legal_moves))))
             target_pos = random.choice(list(zip(*np.where(state[1]))))
-            target_unit = self.game.board[target_pos]
+            target_unit = game.board[target_pos]
 
             action = ActionInstance(current_unit.actions[0], source_unit=current_unit, target_unit=target_unit)
 
@@ -65,17 +88,32 @@ class DnDAgent():
         output = self.predict(state)
         new_pos = to_tuple(np.argwhere(output[0] == np.max(output[0]))[0])
         target_pos = to_tuple(np.argwhere(output[1] == np.max(output[1]))[0])
-        target_unit = self.game.board[target_pos]
+        target_unit = game.board[target_pos]
         action = ActionInstance(current_unit.actions[0], source_unit=current_unit, target_unit=target_unit)
         return new_pos, action, (new_pos, target_pos)
         
-    def save_model(self, path='../checkpoints/', name='unnamed'):
-        torch.save(self.model.state_dict(), os.path.join(path, f'{name}.pt'))
-        torch.save(self.optimizer.state_dict(), os.path.join(path, f'{name}-optim.pt'))
+    def save_model(self, path='../checkpoints/'):
+        torch.save(self.model.state_dict(), os.path.join(path, f'eval_model.pt'))
+        torch.save(self.optimizer.state_dict(), os.path.join(path, f'eval_model_optim.pt'))
 
-    def load_model(self, path='../checkpoints/', name='unnamed'):
-        self.model.load_state_dict(torch.load(os.path.join(path, f'{name}.pt')))
-        self.optimizer.load_state_dict(torch.load(os.path.join(path, f'{name}-optim.pt')))
+    def load_model(self, path='../checkpoints/'):
+        self.model.load_state_dict(torch.load(os.path.join(path, f'eval_model.pt')))
+        self.optimizer.load_state_dict(torch.load(os.path.join(path, f'eval_model_optim.pt')))
+
+    def save_agent(self, path: str) -> None:
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+
+        with open(os.path.join(path, 'agent.pkl'), 'wb') as file:
+            pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
+        self.save_model(path)
+
+    def load_agent(path: str):
+        agent = None
+        with open(os.path.join(path, 'agent.pkl'), 'rb') as file:
+            agent = pickle.load(file)
+        agent.load_model(path)
+        return agent
 
     def memorize(self, state, actions, reward, new_state, game_over):
         self.state_memory[self.memory_position] = state

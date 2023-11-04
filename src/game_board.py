@@ -1,7 +1,6 @@
 import numpy as np
 
 from .utils import *
-from .actions import *
 from .units import *
 
 def transform_matrix(matrix, func):
@@ -14,24 +13,23 @@ def transform_matrix(matrix, func):
     return result_matrix
 
 class DnDBoard():
-    def __init__(self, board_dims=(10, 10)):
-        # 10x10 finite board for now
+    def __init__(self, board_dims: tuple[int, int]=(10, 10)):
         self.board_shape = board_dims
         self.board = np.zeros(board_dims, dtype=object)
         self.board.fill(None)
         self.players_to_units = { }
         self.units_to_players = { }
+        self.units = None
     
-    def get_board(self):
-        return self.board
-    
-    def place_unit(self, unit, position, player_index, replace=False):
+    def place_unit(self, unit: Unit, position: IntPoint2d, player_index: int, replace: bool=False):
         """
             Places the given unit at specified position on the board
             If `replace` is False, raises an error on attempt to replace
             an existing unit
         """
-        if not replace and self.board[position] is not None:
+        if unit in self.units_to_players:
+            raise RuntimeError('The specified unit is already on the board')
+        if not replace and self.is_occupied(position):
             raise RuntimeError('This position is already occupied')
         
         self.board[position] = unit
@@ -40,9 +38,14 @@ class DnDBoard():
         self.players_to_units[player_index].append(unit)
         self.units_to_players[unit] = player_index
     
-    def is_occupied(self, position): return self.board[position] is not None
+    def is_occupied(self, position: IntPoint2d) -> bool:
+        """Is the specified cell on the board occupied by a unit?""" 
+        return self.board[position] is not None
 
-    def initialize_game(self, check_empty=True):
+    def get_unit_position(self, unit: Unit):
+        return np.where(self.board == unit)
+
+    def initialize_game(self, check_empty: bool=True):
         self.units = self.board[self.board != None].flatten().tolist()
         if check_empty and len(self.units) == 0:
             raise RuntimeError('The board is empty')
@@ -51,18 +54,17 @@ class DnDBoard():
         self.turn_order = random.sample(list(range(len(self.units))), len(self.units))
         self.current_turn_index = 0
     
-    def get_current_unit(self):
+    def get_current_unit(self) -> tuple[Unit, int]:
         """
             Returns tuple of (unit, player_id) for the current unit to take turn
             and the player_id that owns the unit
         """
+        if self.units is None: raise RuntimeError('Game was not initialized')
         unit = self.units[self.turn_order[self.current_turn_index]]
         return unit, self.units_to_players[unit]
     
-    def get_unit_position(self, unit):
-        return np.where(self.board == unit)
-    
-    def get_distance(self, unit1, unit2):
+    def get_distance(self, unit1: Unit, unit2: Unit) -> int:
+        """Distance between units on the board"""
         pos1 = self.get_unit_position(unit1)
         pos2 = self.get_unit_position(unit2)
         return manhattan_distance(pos1, pos2)
@@ -184,6 +186,7 @@ class DnDBoard():
         speeds = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.speed)
         attack_ranges = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].range)
         attack_damages = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].attack_damage)
+        healths = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.health)
 
         return np.array([
             ally_units,
@@ -191,5 +194,6 @@ class DnDBoard():
             unit_to_move,
             speeds,
             attack_ranges,
-            attack_damages
+            attack_damages,
+            healths
         ], dtype=np.float32)

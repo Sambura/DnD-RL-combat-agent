@@ -1,22 +1,25 @@
 from .utils import manhattan_distance
+# from .game_board import DnDBoard
+# from .units import Unit
 
 class Action:
     """
     Abstract base class for all actions
     """
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
 
     def invoke(self, *args):
-        raise RuntimeError('Empty aciton invoked')
+        """Invoke the action on the board"""
+        raise NotImplementedError()
 
 class SwordAttack(Action):
-    def __init__(self, attack_damage, range=1, name='Sword attack'):
+    def __init__(self, attack_damage: int, range: int=1, name: str='Sword attack'):
         super().__init__(name)
         self.attack_damage = attack_damage
         self.range = range
 
-    def invoke(self, game, source_unit, target_unit, skip_illegal):
+    def invoke(self, game, source_unit, target_unit, skip_illegal: bool):
         unit_position = game.get_unit_position(source_unit)
         if not self.check_action_legal(game, unit_position, source_unit, target_unit):
             if not skip_illegal: raise RuntimeError('Too far to attack')

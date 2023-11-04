@@ -15,7 +15,13 @@ class Unit:
     def __str__(self): return self.name
 
 class GenericSoldier(Unit):
-    def __init__(self, name='Generic soldier', speed=3, health=100, attack_damage=10, name_postfix=""):
+    def __init__(self, 
+                 name: str='Generic soldier', 
+                 speed: int=3, 
+                 health: int=100, 
+                 attack_damage: int=10,
+                 range: int=1,
+                 name_postfix: str=""):
         super().__init__(name + name_postfix, health, speed)
         
-        self.actions.append(SwordAttack(attack_damage))
+        self.actions.append(SwordAttack(attack_damage, range=range))
