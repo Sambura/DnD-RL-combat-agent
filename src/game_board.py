@@ -227,9 +227,22 @@ class DnDBoard():
         }
 
 if __name__ == '__main__':
-    from .game_utils import print_game
+    from src.game_utils import print_game
+    p1 = GenericSoldier()
+    p2 = GenericSoldier()
+    p3 = GenericSoldier()
+    p4 = GenericSoldier()
+    color_map = {
+            p1: "Green",
+            p2: "Red",
+            p3: "Blue",
+            p4: "Purple"
+        }
     board = DnDBoard()
-    board.place_unit(GenericSoldier(), (3,3), 0)
+    board.place_unit(p1, (3,3), 0)
+    board.place_unit(p2, (4,3), 0)
+    board.place_unit(p3, (4,4), 0)
     board.initialize_game()
-    print_game(board, {})
-    print(board.observe_board_dict())
+    # print_game(board, color_map)
+    # print(board.observe_board_dict())
+    print(board.units)
