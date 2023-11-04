@@ -1,7 +1,14 @@
 import numpy as np
 
-from .utils import *
-from .units import *
+if __name__ == '__main__':
+    import sys
+    from os import path
+    sys.path.append( path.dirname( path.dirname( path.abspath(__file__) ) ) )
+    from src.utils import * 
+    from src.units import *
+else:
+    from .utils import * 
+    from .units import *
 
 def transform_matrix(matrix, func):
     result_matrix = np.empty_like(matrix)
@@ -176,8 +183,8 @@ class DnDBoard():
             reward = -10
         
         return reward, game_over
-
-    def observe_board(self):
+    
+    def observe_board(self) -> np.ndarray:
         current_unit, player_id = self.get_current_unit()
         ally_units = transform_matrix(self.board, lambda x, y, z: (z is not None) and (self.units_to_players[z] == player_id)).astype(bool)
         enemy_units = (self.board != None) ^ ally_units
@@ -197,3 +204,32 @@ class DnDBoard():
             attack_damages,
             healths
         ], dtype=np.float32)
+
+    def observe_board_dict(self) -> dict:
+        current_unit, player_id = self.get_current_unit()
+        ally_units = transform_matrix(self.board, lambda x, y, z: (z is not None) and (self.units_to_players[z] == player_id)).astype(bool)
+        enemy_units = (self.board != None) ^ ally_units
+        unit_to_move = np.zeros(ally_units.shape, dtype=bool)
+        unit_to_move[self.get_unit_position(current_unit)] = True
+        speeds = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.speed)
+        attack_ranges = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].range)
+        attack_damages = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].attack_damage)
+        healths = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.health)
+
+        return {
+            'ally_units': ally_units,
+            'enemy_units': enemy_units,
+            'unit_to_move': unit_to_move,
+            'speeds': speeds,
+            'attack_ranges': attack_ranges,
+            'attack_damages': attack_damages,
+            'healths': healths
+        }
+
+if __name__ == '__main__':
+    from .game_utils import print_game
+    board = DnDBoard()
+    board.place_unit(GenericSoldier(), (3,3), 0)
+    board.initialize_game()
+    print_game(board, {})
+    print(board.observe_board_dict())
