@@ -83,7 +83,8 @@ class DnDAgent():
         print(bytes_to_human_readable(memory_size))
 
     def predict(self, state):
-        return self.eval_model(torch.tensor(state).to(self.device).unsqueeze(0)).detach().cpu().numpy()[0]
+        with torch.no_grad():
+            return self.eval_model(torch.tensor(state).to(self.device).unsqueeze(0)).detach().cpu().numpy()[0]
     
     def choose_action_vector(self, state, random_action_resolver: Optional[callable]=None):
         """

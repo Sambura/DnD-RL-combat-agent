@@ -1,4 +1,4 @@
-from .utils import to_tuple, get_random_coords
+from .utils import *
 from .game_board import DnDBoard
 from .units import Unit
 
@@ -100,3 +100,13 @@ def place_unit_randomly(game: DnDBoard, unit: Unit, player_id: int):
 
         game.place_unit(unit, coords, player_id)
         return
+
+def get_legal_moves(game: DnDBoard):
+    current_unit, _ = game.get_current_unit()
+    pos = game.get_unit_position(current_unit)
+
+    def is_legal(x, y, unit):
+        if unit is not None and unit is not current_unit: return False
+        return manhattan_distance(pos, (x, y)) <= current_unit.speed
+    
+    return transform_matrix(game.board, is_legal).astype(bool)
