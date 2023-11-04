@@ -1,7 +1,7 @@
 from torch import nn
 
 class DnDEvalModel(nn.Module):
-    def __init__(self, in_layers: int, out_layers: int, ):
+    def __init__(self, in_layers: int, out_layers: int):
         super(DnDEvalModel, self).__init__()
         relu_slope = 0.003
         self.layers = nn.Sequential(

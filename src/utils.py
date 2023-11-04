@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from math import ceil, sqrt
 import numpy as np
 import random
+from itertools import zip_longest
 
 from typing import Union, Optional
 
@@ -13,11 +14,9 @@ class MovementError(Exception):
 
 def manhattan_distance(point1: IntPoint2d, point2: IntPoint2d) -> int:
     """Calculate Manhattan distance between two points"""
-    x1, y1 = point1
-    x2, y2 = point2
-    return abs(x1 - x2) + abs(y1 - y2)
+    return abs(point1[0] - point2[0]) + abs(point1[1] - point2[1])
 
-def to_tuple(coords: IntPoint2d) -> tuple[int, int]:
+def to_tuple(coords: any) -> tuple:
     """Convert from list/ndarray coordinates representation to tuple of ints"""
     return tuple(np.array(coords).flatten())
 
@@ -39,13 +38,13 @@ def plot_featuremaps(data: np.ndarray,
     Plots a stack of 2D featuremaps
 
     Parameters:
-    data (ndarray): ndarray of 2D featuremaps with shape [N, H, W], where N - number of 
+    data (ndarray): ndarray of 2D featuremaps with shape [N, H, W], where N - number of \
         featuremaps, H - height, W - width
     title (str): Title of the plot
     fm_names (list[str]) list of length N, with names of the featuremaps in `data`
     vmin, vmax: refer to plt.colorbar()
     shape (tuple[int, int]): Size of grid where featuremap will be plotted
-    separate_cbars (bool): If True, each featuremap will have its own colorbar, 
+    separate_cbars (bool): If True, each featuremap will have its own colorbar, \
         and `vmin` & `vmax` parameters will be ignored
     show: (bool): If True, plt.show() is called. Otherwise tuple (fig, axes) is returned
     cmap (str): colormap to use
@@ -70,7 +69,11 @@ def plot_featuremaps(data: np.ndarray,
     if title is not None: fig.suptitle(title)
     axs = np.asarray(ax_m).ravel()
     imgs = []
-    for i, (fm, ax) in enumerate(zip(data, axs)):
+    for i, (fm, ax) in enumerate(zip_longest(data[:len(axs)], axs)):
+        if fm is None:
+            ax.set_axis_off()
+            continue
+
         imgs.append(ax.imshow(fm, cmap=cmap, vmin=vmin, vmax=vmax))
         if fm_names is not None:
             ax.set_title(fm_names[i])
@@ -87,3 +90,24 @@ def plot_featuremaps(data: np.ndarray,
         return
     
     return fig, ax_m
+
+def bytes_to_human_readable(bytes):
+    if bytes < 1024:
+        return f'{bytes} bytes'
+    elif bytes < 1024**2:
+        return f'{bytes / 1024:.2f} KB'
+    elif bytes < 1024**3:
+        return f'{bytes / (1024**2):.2f} MB'
+    elif bytes < 1024**4:
+        return f'{bytes / (1024**3):.2f} GB'
+    else:
+        return f'{bytes / (1024**4):.2f} TB'
+
+def transform_matrix(matrix, func):
+    result_matrix = np.empty_like(matrix)
+
+    for i in range(matrix.shape[0]):
+        for j in range(matrix.shape[1]):
+            result_matrix[i, j] = func(i, j, matrix[i, j])
+
+    return result_matrix
