@@ -1,6 +1,4 @@
 from .actions import SwordAttack
-from PIL import Image
-import numpy as np
 
 class Unit:
     def __init__(self, name, health, speed, UID) -> None:
@@ -39,22 +37,3 @@ class GenericSoldier(Unit):
                  UID=None) -> None:
         super().__init__(name + name_postfix, health, speed, UID)
         self.actions.append(SwordAttack(attack_damage, range=range))
-
-class RenderUnit:
-    def __init__(self, unitUID: int, pos: tuple, token: Image) -> None:
-        self.unitUID = unitUID
-        self.pos = np.array(pos, dtype = int)
-        self.token = token
-
-    def getToken(self, size = None) -> Image: 
-        if size is None:
-            return self.token.copy()
-        else:
-            return self.token.copy().resize((size, size))
-    
-    def getUID(self) -> str:
-        return self.unitUID
-    
-    def getPos(self) -> np.array:
-        return self.pos
-

@@ -1,5 +1,5 @@
 from typing import List
-from .units import RenderUnit
+from .adapters import RenderUnit
 from PIL import Image, ImageDraw
 import numpy as np
 
