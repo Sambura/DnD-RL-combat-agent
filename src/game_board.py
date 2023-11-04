@@ -34,7 +34,6 @@ class DnDBoard():
         return np.array([unit.get_UID() for unit in self.units])
 
     def get_unit_by_UID(self, UID:str) -> Unit:
-        # print(UID, self.get_UIDs())
         return self.units[np.where(self.get_UIDs() == UID)[0][0]]
 
     def assign_UID(self, position: IntPoint2d):
@@ -168,23 +167,24 @@ class DnDBoard():
             self.board[unit_pos] = None
             self.board[new_position] = unit
 
-    def check_move_legal(self, unit:Unit, new_position: IntPoint2d, verbose=False):
+    def check_move_legal(self, unit:Unit, new_position: IntPoint2d):
         unit_position = self.get_unit_position(unit)
         target_cell = self.board[new_position]
         if target_cell is not None and target_cell is not unit:
-            if verbose: print('Cell occupied')
-            return False
+            raise MovementError('Cell occupied')
 
         if manhattan_distance(unit_position, new_position) > unit.speed:
-            if verbose: print('Too far')
-            return False
+            raise MovementError('Too far')
         
         return True
 
     def take_turn(self, new_position, action, skip_illegal=False):
         unit, player_id = self.get_current_unit()
-        self.move_token(unit=unit, new_position=new_position, skip_illegal=skip_illegal)
-
+        try:
+            self.move_token(unit=unit, new_position=new_position, skip_illegal=skip_illegal)
+        except MovementError as e: 
+            if skip_illegal:
+                raise e
         if not self.check_action_legal(new_position, action):
             if not skip_illegal: raise RuntimeError('Illegal action')
 

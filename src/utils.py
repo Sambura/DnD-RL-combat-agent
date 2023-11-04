@@ -7,6 +7,10 @@ from typing import Union, Optional
 
 IntPoint2d = Union[tuple[int, int], np.ndarray, list[int]]
 
+class MovementError(Exception):
+    'Raised if token can not move into selected position'
+    pass
+
 def manhattan_distance(point1: IntPoint2d, point2: IntPoint2d) -> int:
     """Calculate Manhattan distance between two points"""
     x1, y1 = point1
