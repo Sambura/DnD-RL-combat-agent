@@ -1,4 +1,6 @@
 import numpy as np
+import re
+from typing import List
 
 if __name__ == '__main__':
     import sys
@@ -24,10 +26,30 @@ class DnDBoard():
         self.board_shape = board_dims
         self.board = np.zeros(board_dims, dtype=object)
         self.board.fill(None)
-        self.players_to_units = { }
-        self.units_to_players = { }
-        self.units = None
+        self.players_to_units = {}
+        self.units_to_players = {}
+        self.units: List[Unit] = []
     
+    def get_UIDs(self):
+        return [unit.get_UID() for unit in self.units]
+
+    def assign_UID(self, position: IntPoint2d):
+        unit:Unit = self.board[position]
+        if unit is None:
+            raise Exception('tried to asign UID to None unit')
+        if unit.UID is not None:
+            raise Exception('tried to asign UID to unit that already have UID')
+        UIDs = self.get_UIDs()
+        UID = unit.name
+        splitted_label = list(filter(None, re.split(r'(\d+)', UID)))
+        while UID in UIDs:
+            try:
+                splitted_label[-1] = str(int(splitted_label[-1])+1)
+            except:
+                splitted_label.append('0')
+            UID = ''.join(splitted_label)
+        self.board[position].UID = UID
+        
     def place_unit(self, unit: Unit, position: IntPoint2d, player_index: int, replace: bool=False):
         """
             Places the given unit at specified position on the board
@@ -40,6 +62,7 @@ class DnDBoard():
             raise RuntimeError('This position is already occupied')
         
         self.board[position] = unit
+        self.assign_UID(position)
         if player_index not in self.players_to_units: 
             self.players_to_units[player_index] = []
         self.players_to_units[player_index].append(unit)
