@@ -31,7 +31,11 @@ class DnDBoard():
         self.units: List[Unit] = []
     
     def get_UIDs(self):
-        return [unit.get_UID() for unit in self.units]
+        return np.array([unit.get_UID() for unit in self.units])
+
+    def get_unit_by_UID(self, UID:str) -> Unit:
+        # print(UID, self.get_UIDs())
+        return self.units[np.where(self.get_UIDs() == UID)[0][0]]
 
     def assign_UID(self, position: IntPoint2d):
         unit:Unit = self.board[position]
@@ -67,7 +71,8 @@ class DnDBoard():
             self.players_to_units[player_index] = []
         self.players_to_units[player_index].append(unit)
         self.units_to_players[unit] = player_index
-    
+        self.units.append(unit)
+
     def is_occupied(self, position: IntPoint2d) -> bool:
         """Is the specified cell on the board occupied by a unit?""" 
         return self.board[position] is not None
@@ -76,6 +81,7 @@ class DnDBoard():
         return np.where(self.board == unit)
 
     def initialize_game(self, check_empty: bool=True):
+        #TODO: check UIDs for uniquness
         self.units = self.board[self.board != None].flatten().tolist()
         if check_empty and len(self.units) == 0:
             raise RuntimeError('The board is empty')
@@ -98,21 +104,6 @@ class DnDBoard():
         pos1 = self.get_unit_position(unit1)
         pos2 = self.get_unit_position(unit2)
         return manhattan_distance(pos1, pos2)
-
-    def check_move_legal(self, new_position, verbose=False):
-        unit, player_id = self.get_current_unit()
-        unit_position = self.get_unit_position(unit)
-        target_cell = self.board[new_position]
-
-        if target_cell is not None and target_cell is not unit:
-            if verbose: print('Cell occupied')
-            return False
-
-        if manhattan_distance(unit_position, new_position) > unit.speed:
-            if verbose: print('Too far')
-            return False
-        
-        return True
     
     def check_action_legal(self, new_position, action, verbose=False):
         if action is None: return True
@@ -167,16 +158,32 @@ class DnDBoard():
         
         return transform_matrix(self.board, is_legal).astype(bool)
 
-    def take_turn(self, new_position, action, skip_illegal=False):
-        move_legal = self.check_move_legal(new_position)
-        unit, player_id = self.get_current_unit()
-
+    def move_token(self, unit: Unit, new_position: IntPoint2d, skip_illegal=False) -> None:
+        move_legal = self.check_move_legal(unit, new_position)
+        
         if not move_legal:
             if not skip_illegal: raise RuntimeError('Illegal move')
         else:
             unit_pos = self.get_unit_position(unit)
             self.board[unit_pos] = None
             self.board[new_position] = unit
+
+    def check_move_legal(self, unit:Unit, new_position: IntPoint2d, verbose=False):
+        unit_position = self.get_unit_position(unit)
+        target_cell = self.board[new_position]
+        if target_cell is not None and target_cell is not unit:
+            if verbose: print('Cell occupied')
+            return False
+
+        if manhattan_distance(unit_position, new_position) > unit.speed:
+            if verbose: print('Too far')
+            return False
+        
+        return True
+
+    def take_turn(self, new_position, action, skip_illegal=False):
+        unit, player_id = self.get_current_unit()
+        self.move_token(unit=unit, new_position=new_position, skip_illegal=skip_illegal)
 
         if not self.check_action_legal(new_position, action):
             if not skip_illegal: raise RuntimeError('Illegal action')
@@ -269,3 +276,4 @@ if __name__ == '__main__':
     # print_game(board, color_map)
     # print(board.observe_board_dict())
     print(board.units)
+    print(board.board[(4,3)].get_UID())

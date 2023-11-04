@@ -61,7 +61,7 @@ def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
     color = unit_to_color[unit]
     print(f'Next move is by player #{player_id}: `{COLORS[color]}{unit.name}{COLORS["Reset"]}`')
 
-def take_turn(game, new_coords, action, unit_to_color, agent=False, prnt_game=True, print_move=True):
+def take_turn(game: DnDBoard, new_coords, action, unit_to_color, agent=False, prnt_game=True, print_move=True):
     COLORS = {
         "Red": "\033[91m",
         "Green": "\033[92m",

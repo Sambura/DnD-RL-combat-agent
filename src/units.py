@@ -52,8 +52,8 @@ class RenderUnit:
         else:
             return self.token.copy().resize((size, size))
     
-    def getLabel(self) -> str:
-        return self.unit.name
+    def getUID(self) -> str:
+        return self.unitUID
     
     def getPos(self) -> np.array:
         return self.pos
