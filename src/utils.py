@@ -1,8 +1,9 @@
+from itertools import zip_longest
 import matplotlib.pyplot as plt
 from math import ceil, sqrt
 import numpy as np
 import random
-from itertools import zip_longest
+import torch
 
 from typing import Union, Optional
 
@@ -107,3 +108,9 @@ def transform_matrix(matrix, func):
             result_matrix[i, j] = func(i, j, matrix[i, j])
 
     return result_matrix
+
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)

@@ -67,7 +67,7 @@ class DnDAgent():
         self.epsilon = max(self.epsilon - self.epsilon_delta, self.min_epsilon)
     
     def exp_epsilon_step(self) -> None:
-        self.epsilon = max(self.epsilon * self.epsilon_delta, self.min_epsilon)
+        self.epsilon = max(self.epsilon * (1 - self.epsilon_delta), self.min_epsilon)
     
     def estimate_memory_size_self(self, return_result: bool=False):
         return DnDAgent.estimate_memory_size(self.board_shape, self.in_channels, self.out_channels, self.memory_capacity, return_result)
@@ -83,7 +83,7 @@ class DnDAgent():
         print(bytes_to_human_readable(memory_size))
 
     def predict(self, state):
-        with torch.no_grad():
+        with torch.no_grad(): # this just makes prediction a bit faster (I checked)
             return self.eval_model(torch.tensor(state).to(self.device).unsqueeze(0)).detach().cpu().numpy()[0]
     
     def choose_action_vector(self, state, random_action_resolver: Optional[callable]=None):
@@ -156,14 +156,14 @@ class DnDAgent():
         game_overs = self.game_over_memory[batch_indices]
 
         q_evals = self.eval_model(states) # [B, 2, H, W]
-        with torch.no_grad():
-            q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, 2, H*W]
+        # with torch.no_grad():
+        q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, 2, H*W]
 
         batch_index = np.arange(self.batch_size, dtype=np.int32)
 
         q_target = torch.clone(q_evals)
         for i in range(self.out_channels):
-            q_target[batch_index, i, actions[:, i, 0], actions[:, i, 1]] = rewards + self.gamma * torch.max(q_nexts[:, i], dim=1)[0]
+            q_target[batch_index, i, actions[:, 0, i], actions[:, 1, i]] = rewards + self.gamma * torch.max(q_nexts[:, i], dim=1)[0]
 
         loss = self.loss_fn(q_evals, q_target)
         loss.backward()
