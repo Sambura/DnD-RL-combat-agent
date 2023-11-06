@@ -197,9 +197,13 @@ class DnDBoard():
         updates = self.update_board()
         self.advance_turn()
 
-        return self.calculate_reward(player_id, updates['units_removed'])
+        return self.calculate_reward(player_id, move_legal, action_legal, updates['units_removed'])
     
-    def calculate_reward(self, player_id: int, units_removed: list[tuple[Unit, int]]):
+    def calculate_reward(self, player_id: int, move_legal, action_legal, units_removed: list[tuple[Unit, int]]):
+        # reward = -0.01
+        # if not move_legal: reward -= 0.5
+        # if not action_legal: reward -= 0.25
+        # if action_legal: reward += 0.25
         reward = 0
         game_over = False
         # reward for removing enemy units, 1 for each unit

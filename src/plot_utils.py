@@ -91,7 +91,7 @@ def plot_training_history(iters, eps=None, checkpoints=None, xlim=None, ylim=Non
         colors = ['orange', 'k', 'green'] * (len(smoothness) // 3 + 1)
         for n, color in zip(smoothness, colors):
             smooth = np.convolve(iters, np.ones(n) / n, mode='valid')
-            ax.plot(range(n // 2, len(smooth) + n // 2), smooth, label='Interations, averaged', color=color)
+            ax.plot(range(n // 2, len(smooth) + n // 2), smooth, label='Iterations, averaged', color=color)
 
     artists, labels = ax.get_legend_handles_labels()
 
