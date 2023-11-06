@@ -17,7 +17,7 @@ class DnDAgent():
                  epsilon: float=0.99, 
                  min_epsilon: float=0.01, 
                  epsilon_delta: float=1e-5, 
-                 espsilon_strategy: str='linear',
+                 epsilon_strategy: str='linear',
                  gamma: float=0.9, 
                  memory_capacity: int=100000, 
                  batch_size: int=128,
@@ -42,7 +42,7 @@ class DnDAgent():
             'linear': self.linear_epsilon_step,
             'exp': self.exp_epsilon_step
         }
-        self.epsilon_step = epsilon_strategies[espsilon_strategy]
+        self.epsilon_step = epsilon_strategies[epsilon_strategy]
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.eval_model = DnDEvalModel(self.in_channels, self.out_channels).train().to(self.device)
@@ -156,7 +156,6 @@ class DnDAgent():
         game_overs = self.game_over_memory[batch_indices]
 
         q_evals = self.eval_model(states) # [B, 2, H, W]
-        # with torch.no_grad():
         q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, 2, H*W]
 
         batch_index = np.arange(self.batch_size, dtype=np.int32)

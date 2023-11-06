@@ -223,29 +223,23 @@ class DnDBoard():
 
         state = np.zeros((state_channels, *self.board_shape), dtype=np.float32)
         ally_units = transform_matrix(self.board, lambda x, y, z: (z is not None) and (self.units_to_players[z] == player_id)).astype(bool)
+        unit_position = to_tuple(self.get_unit_position(current_unit))
         
         state[0] = ally_units
         state[1] = (self.board != None) ^ ally_units
-        state[2, *self.get_unit_position(current_unit)] = 1
+        state[2, unit_position[0], unit_position[1]] = 1 # [2, *unit_position] seems to cause some problems...
         state[3] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.speed)
         state[4] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].range)
         state[5] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].attack_damage)
         state[6] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.health)
 
         return state
+    
+    def get_featuremap_names(self): 
+        return ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health']
 
     def observe_board_dict(self) -> dict:
-        raw_board = self.observe_board()
-
-        return {
-            'ally_units': raw_board[0].astype(bool),
-            'enemy_units': raw_board[1].astype(bool),
-            'unit_to_move': raw_board[2].astype(bool),
-            'speeds': raw_board[3],
-            'attack_ranges': raw_board[4],
-            'attack_damages': raw_board[5],
-            'healths': raw_board[6]
-        }
+        return { key: value for key, value in zip(self.get_featuremap_names(), self.observe_board()) }
 
 if __name__ == '__main__':
     from src.game_utils import print_game
