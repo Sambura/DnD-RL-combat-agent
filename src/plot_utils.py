@@ -71,7 +71,16 @@ def plot_featuremaps(data: np.ndarray,
     
     return fig, ax_m
 
-def plot_training_history(iters, eps=None, checkpoints=None, xlim=None, ylim=None, figsize=(11, 6), smoothness=[300, 3000], show=True):
+def plot_training_history(iters, 
+                          eps=None, 
+                          checkpoints=None,
+                          vlines=None,
+                          xlim=None, 
+                          ylim=None, 
+                          figsize=(11, 6), 
+                          smoothness=[300, 3000], 
+                          average_last=1000,
+                          show=True):
     plt.figure(figsize=figsize)
     plt.title('Number of iterations per game')
     plt.xlabel('Game')
@@ -84,6 +93,7 @@ def plot_training_history(iters, eps=None, checkpoints=None, xlim=None, ylim=Non
         if not hasattr(ylim, '__len__'): plt.ylim(np.min(iters), ylim)
         else: plt.ylim(ylim)
     plt.xlim(xlim)
+    iters = iters[xlim[0]:xlim[1]]
 
     ax: plt.Axes = plt.gca()
     ax.plot(iters, label='Iterations', alpha=0.65)
@@ -95,6 +105,17 @@ def plot_training_history(iters, eps=None, checkpoints=None, xlim=None, ylim=Non
 
     artists, labels = ax.get_legend_handles_labels()
 
+    if average_last is not None:
+        avg = np.mean(iters[-average_last:])
+        y_min, y_max = ax.get_ylim()
+        yspan = y_max - y_min
+        avg_nml = (avg - y_min) / yspan
+        ax.axhline(avg, c='k', lw=2, alpha=0.5)
+        text_y_nml = avg_nml + (0.03 if avg_nml >= 0.5 else -0.05)
+        text_y = text_y_nml * yspan + y_min
+        text_x = xlim[0] * 0.95 + xlim[1] * 0.05
+        ax.text(text_x, text_y, f'avg = {avg:0.2f}', fontsize=14)
+
     if checkpoints is not None:
         for checkpoint in checkpoints:
             ax.axvline(checkpoint, c='k', alpha=0.6, lw=1.5, linestyle='--')
@@ -104,6 +125,20 @@ def plot_training_history(iters, eps=None, checkpoints=None, xlim=None, ylim=Non
         ax2.plot(eps, color='red', label='Epsilon')
 
         for x, y in zip((artists, labels), ax2.get_legend_handles_labels()): x += y
+
+    if vlines is not None and len(vlines) > 0:
+        if not hasattr(vlines[0], '__len__'): vlines = [vlines]
+
+        for vline in vlines:
+            if isinstance(vline, dict):
+                points = vline.pop('data')
+                kwargs = vline
+            else:
+                points = vline
+                kwargs = { 'c': 'red', 'lw': 1, 'linestyle': '--', 'alpha': 0.8}
+                
+            for point in points:
+                ax.axvline(point, **kwargs)
 
     ax2.legend(artists, labels)
 

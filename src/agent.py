@@ -37,6 +37,7 @@ class DnDAgent():
         self.dual_learning = dual_learning
         self.replace_model_interval = replace_model_interval
         self.replace_model_counter = 0
+        self.on_replace = None
         
         epsilon_strategies = {
             'linear': self.linear_epsilon_step,
@@ -143,6 +144,7 @@ class DnDAgent():
             if self.replace_model_counter >= self.replace_model_interval:
                 self.replace_model_counter = 0
                 self.next_model.load_state_dict(self.eval_model.state_dict())
+                if self.on_replace is not None: self.on_replace()
 
         self.optimizer.zero_grad()
 
