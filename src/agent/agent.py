@@ -63,25 +63,6 @@ class DnDAgent():
         self.actions_memory = np.zeros(actions_shape, dtype=np.float32)
         self.reward_memory = np.zeros(memory_capacity, dtype=np.float32)
         self.game_over_memory = np.zeros(memory_capacity, dtype=np.bool_)
-    
-    def linear_epsilon_step(self) -> None:
-        self.epsilon = max(self.epsilon - self.epsilon_delta, self.min_epsilon)
-    
-    def exp_epsilon_step(self) -> None:
-        self.epsilon = max(self.epsilon * (1 - self.epsilon_delta), self.min_epsilon)
-    
-    def estimate_memory_size_self(self, return_result: bool=False):
-        return DnDAgent.estimate_memory_size(self.board_shape, self.in_channels, self.out_channels, self.memory_capacity, return_result)
-
-    def estimate_memory_size(board_shape: tuple[int, int], in_channels: int, out_actions: int, memory_capacity: int=100000, return_result=False) -> int:
-        states_size = np.prod((memory_capacity, in_channels, *board_shape))
-        actions_size = np.prod((memory_capacity, out_actions, 2))
-
-        #        states + new_states +    actions +      game_overs +        rewards
-        memory_size = states_size * 2 + actions_size + memory_capacity + memory_capacity * 4
-
-        if return_result: return memory_size
-        print(bytes_to_human_readable(memory_size))
 
     def predict(self, state):
         with torch.no_grad(): # this just makes prediction a bit faster (I checked)
@@ -170,3 +151,31 @@ class DnDAgent():
         loss.backward()
         self.optimizer.step()
         self.epsilon_step()
+
+    def linear_epsilon_step(self) -> None:
+        self.epsilon = max(self.epsilon - self.epsilon_delta, self.min_epsilon)
+    
+    def exp_epsilon_step(self) -> None:
+        self.epsilon = max(self.epsilon * (1 - self.epsilon_delta), self.min_epsilon)
+    
+    def estimate_memory_size_self(self, return_result: bool=False):
+        return DnDAgent.estimate_memory_size(self.board_shape, self.in_channels, self.out_channels, self.memory_capacity, return_result)
+
+    def estimate_memory_size(board_shape: tuple[int, int], in_channels: int, out_actions: int, memory_capacity: int=100000, return_result=False) -> int:
+        states_size = np.prod((memory_capacity, in_channels, *board_shape))
+        actions_size = np.prod((memory_capacity, out_actions, 2))
+
+        #        states + new_states +    actions +      game_overs +        rewards
+        memory_size = states_size * 2 + actions_size + memory_capacity + memory_capacity * 4
+
+        if return_result: return memory_size
+        print(bytes_to_human_readable(memory_size))
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['on_replace']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.on_replace = None

@@ -23,7 +23,7 @@ class ActionError(Exception):
     pass
 
 class DnDBoard():
-    def __init__(self, board_dims: tuple[int, int]=(10, 10)):
+    def __init__(self, board_dims: tuple[int, int]=(10, 10), reward_head=None):
         self.board_shape = board_dims
         self.board = np.zeros(board_dims, dtype=object)
         self.board.fill(None)
@@ -31,7 +31,8 @@ class DnDBoard():
         self.units_to_players = {}
         self.units: List[Unit] = []
         self.turn_order = None
-    
+        self.reward_head = DnDBoard.calculate_reward_classic if reward_head is None else reward_head
+
     def get_UIDs(self):
         return np.array([unit.get_UID() for unit in self.units])
 
@@ -65,6 +66,8 @@ class DnDBoard():
             raise RuntimeError('The specified unit is already on the board')
         if not replace and self.is_occupied(position):
             raise RuntimeError('This position is already occupied')
+        if self.turn_order is not None:
+            raise NotImplementedError('Placing units after game initialization is not supported yet')
         
         self.board[position] = unit
         self.assign_UID(position)
@@ -120,7 +123,7 @@ class DnDBoard():
             if self.turn_order[i] < unit_turn_value: continue
             self.turn_order[i] -= 1
 
-        if self.current_turn_index >= unit_turn_value:
+        if self.current_turn_index >= unit_index:
             self.current_turn_index -= 1
 
     def update_board(self) -> dict[str, list[tuple[Unit, int]]]:
@@ -197,9 +200,10 @@ class DnDBoard():
         updates = self.update_board()
         self.advance_turn()
 
-        return self.calculate_reward(player_id, move_legal, action_legal, updates['units_removed'])
+        return self.reward_head(self, unit, player_id, move_legal, action_legal, updates)
     
-    def calculate_reward(self, player_id: int, move_legal, action_legal, units_removed: list[tuple[Unit, int]]):
+    def calculate_reward_classic(game, unit: Unit, player_id: int, move_legal: bool, action_legal: bool, updates: dict):
+        units_removed = updates['units_removed']
         # reward = -0.01
         # if not move_legal: reward -= 0.5
         # if not action_legal: reward -= 0.25
@@ -209,13 +213,13 @@ class DnDBoard():
         # reward for removing enemy units, 1 for each unit
         reward += len([x for x in units_removed if x[1] != player_id])
         # reward for defeating players
-        reward += 5 * len([x for x in units_removed if len(self.players_to_units[x[1]]) == 0 and x[1] != player_id])
+        reward += 5 * len([x for x in units_removed if len(game.players_to_units[x[1]]) == 0 and x[1] != player_id])
         # reward for winning
-        if len(self.players_to_units[player_id]) == len(self.units):
+        if len(game.players_to_units[player_id]) == len(game.units):
             game_over = True
             reward += 10
         # penalty for losing (on your own turn ??)
-        if len(self.players_to_units[player_id]) == 0:
+        if len(game.players_to_units[player_id]) == 0:
             game_over = True
             reward = -10
         

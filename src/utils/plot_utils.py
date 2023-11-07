@@ -109,7 +109,7 @@ def plot_training_history(iters,
         avg = np.mean(iters[-average_last:])
         y_min, y_max = ax.get_ylim()
         yspan = y_max - y_min
-        avg_nml = (avg - y_min) / yspan
+        avg_nml = np.clip((avg - y_min) / yspan, 0.01, 0.99)
         ax.axhline(avg, c='k', lw=2, alpha=0.5)
         text_y_nml = avg_nml + (0.03 if avg_nml >= 0.5 else -0.05)
         text_y = text_y_nml * yspan + y_min
