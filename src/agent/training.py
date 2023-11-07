@@ -1,5 +1,5 @@
+from ..dnd.game_board import DnDBoard
 from .agent import DnDAgent
-from .game_board import DnDBoard
 from .agent_utils import get_states
 from typing import Optional
 

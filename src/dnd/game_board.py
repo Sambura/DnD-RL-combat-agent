@@ -6,11 +6,11 @@ if __name__ == '__main__':
     import sys
     from os import path
     sys.path.append( path.dirname( path.dirname( path.abspath(__file__) ) ) )
-    from src.utils import * 
-    from src.units import *
-    from src.actions import ActionInstance
+    from src.utils.common import * 
+    from src.dnd.units import *
+    from src.dnd.actions import ActionInstance
 else:
-    from .utils import * 
+    from ..utils.common import * 
     from .units import *
     from .actions import ActionInstance
 
@@ -246,7 +246,7 @@ class DnDBoard():
         return { key: value for key, value in zip(self.get_featuremap_names(), self.observe_board()) }
 
 if __name__ == '__main__':
-    from src.game_utils import print_game
+    from src.dnd.game_utils import print_game
     p1 = GenericSoldier()
     p2 = GenericSoldier()
     p3 = GenericSoldier()

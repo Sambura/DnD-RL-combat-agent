@@ -1,8 +1,8 @@
+from ..utils.common import bytes_to_human_readable, get_random_coords
 from .deep_q_network import DnDEvalModel
 from torch import nn
 import numpy as np
 import random
-from .utils import bytes_to_human_readable, get_random_coords
 from typing import Optional
 import pickle
 import torch

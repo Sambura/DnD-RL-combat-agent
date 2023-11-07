@@ -1,8 +1,8 @@
-from .game_board import DnDBoard
-from .actions import ActionInstance
-from .utils import to_tuple, IntPoint2d
+from ..dnd.game_board import DnDBoard
+from ..dnd.actions import ActionInstance
+from ..utils.common import to_tuple, IntPoint2d
+from ..dnd.game_utils import get_legal_moves
 from .agent import DnDAgent
-from .game_utils import get_legal_moves
 import numpy as np
 import random
 

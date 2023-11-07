@@ -1,4 +1,4 @@
-from .utils import manhattan_distance
+from ..utils.common import manhattan_distance
 # from .game_board import DnDBoard
 # from .units import Unit
 
