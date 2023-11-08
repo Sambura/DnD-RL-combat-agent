@@ -116,15 +116,16 @@ class DnDBoard():
         self.units.remove(unit)
         self.players_to_units[player_id].remove(unit)
         self.board[unit_pos] = None
-        unit_turn_value = self.turn_order[unit_index]
-        self.turn_order.remove(unit_turn_value)
+        unit_turn_index = self.turn_order.index(unit_index)
+
+        if self.current_turn_index >= unit_turn_index:
+            self.current_turn_index -= 1
+
+        self.turn_order.remove(unit_index)
 
         for i in range(len(self.turn_order)):
-            if self.turn_order[i] < unit_turn_value: continue
+            if self.turn_order[i] < unit_index: continue
             self.turn_order[i] -= 1
-
-        if self.current_turn_index >= unit_index:
-            self.current_turn_index -= 1
 
     def update_board(self) -> dict[str, list[tuple[Unit, int]]]:
         """Removes all the dead units from the board"""

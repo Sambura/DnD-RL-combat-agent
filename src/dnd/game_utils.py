@@ -2,18 +2,18 @@ from ..utils.common import *
 from .game_board import DnDBoard
 from .units import Unit
 
-def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
-    COLORS = {
-        "Red": "\033[91m",
-        "Green": "\033[92m",
-        "Blue": "\033[94m",
-        "Purple": "\033[95m",
-        "Orange": "\033[93m",
-        "Cyan": "\033[96m",
-        "Magenta": "\033[95m",
-        "Reset": "\033[0m",
-    }
+CCOLORS = {
+    "Red": "\033[91m",
+    "Green": "\033[92m",
+    "Blue": "\033[94m",
+    "Purple": "\033[95m",
+    "Orange": "\033[93m",
+    "Cyan": "\033[96m",
+    "Magenta": "\033[95m",
+    "Reset": "\033[0m",
+}
 
+def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
     num_rows, num_cols = game.board.shape
     number_padding = 2
 
@@ -24,7 +24,7 @@ def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
         print(f'\tPlayer #{player_id} ({len(units)} units): ', end='')
         for unit in units:
             color = unit_to_color[unit]
-            print(f'`{COLORS[color]}{unit.name} ({unit.health} HP){COLORS["Reset"]}`', end=', ')
+            print(f'`{CCOLORS[color]}{unit.name} ({unit.health} HP){CCOLORS["Reset"]}`', end=', ')
         print("\b\b  ")
     print(f'\t')
 
@@ -45,7 +45,7 @@ def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
                 formatted_value = "  "  # Represents "empty" with two space characters
             else:
                 color = unit_to_color[unit]
-                formatted_value = f"{COLORS[color]}██{COLORS['Reset']}"  # Colorize # characters
+                formatted_value = f"{CCOLORS[color]}██{CCOLORS['Reset']}"  # Colorize # characters
             print(formatted_value, end="")
 
         print(f"{i:>{number_padding}} ")
@@ -59,23 +59,12 @@ def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
 
     unit, player_id = game.get_current_unit()
     color = unit_to_color[unit]
-    print(f'Next move is by player #{player_id}: `{COLORS[color]}{unit.name}{COLORS["Reset"]}`')
+    print(f'Next move is by player #{player_id}: `{CCOLORS[color]}{unit.name}{CCOLORS["Reset"]}`')
 
 def take_turn(game: DnDBoard, new_coords, action, unit_to_color, skip_illegal=False, prnt_game=True, print_move=True):
-    COLORS = {
-        "Red": "\033[91m",
-        "Green": "\033[92m",
-        "Blue": "\033[94m",
-        "Purple": "\033[95m",
-        "Orange": "\033[93m",
-        "Cyan": "\033[96m",
-        "Magenta": "\033[95m",
-        "Reset": "\033[0m",
-    }
-
     unit, player_id = game.get_current_unit()
     color = unit_to_color[unit]
-    if print_move: print(f'Turn made by player #{player_id}: `{COLORS[color]}{unit.name}{COLORS["Reset"]}`:')
+    if print_move: print(f'Turn made by player #{player_id}: `{CCOLORS[color]}{unit.name}{CCOLORS["Reset"]}`:')
     old_coords = to_tuple(game.get_unit_position(unit))
     new_coords = to_tuple(new_coords)
     if print_move: print(f'\tUnit {"moves" if old_coords != new_coords else "does not move"}: {old_coords} -> {new_coords};')
