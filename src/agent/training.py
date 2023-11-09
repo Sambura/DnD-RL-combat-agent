@@ -22,9 +22,10 @@ def train_loop_trivial(agent: DnDAgent,
     """
     for iter_count in range(iter_limit):
         state, action_vector, new_coords, action = get_states(game, agent, random_action_resolver)
+        _, player_id = game.get_current_unit()
 
         reward, game_over = game.take_turn(new_coords, action, skip_illegal=True)
-        new_state = game.observe_board()
+        new_state = game.observe_board(player_id)
 
         agent.memorize(state, action_vector, reward, new_state, game_over)
         agent.learn()

@@ -33,7 +33,7 @@ def get_states(game: DnDBoard,
     
     Returns: tuple (board_state, action_vector, new_coords, action_instance)
     """
-    state = game.observe_board(state_indices)
+    state = game.observe_board(indices=state_indices)
     action_vector = agent.choose_action_vector(state, random_action_resolver)
     new_coords, action = decode_action(game, action_vector)
 

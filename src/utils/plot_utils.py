@@ -119,6 +119,7 @@ def plot_training_history(iters,
         for checkpoint in checkpoints:
             ax.axvline(checkpoint, c='k', alpha=0.6, lw=1.5, linestyle='--')
     
+    ax2 = None
     if eps is not None:
         ax2 = plt.twinx()
         ax2.plot(eps, color='red', label='Epsilon')
@@ -139,6 +140,7 @@ def plot_training_history(iters,
             for point in points:
                 ax.axvline(point, **kwargs)
 
-    ax2.legend(artists, labels)
+    ax.legend(artists, labels, loc='upper right')
 
     if show: plt.show()
+    else: return (ax, ax2) if ax2 is not None else ax

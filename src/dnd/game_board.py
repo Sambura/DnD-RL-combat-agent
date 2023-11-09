@@ -248,14 +248,15 @@ class DnDBoard():
 
     def passthrough_reward_head(game, *args): return args
 
-    def observe_board(self, indices=None) -> np.ndarray[np.float32]:
-        if indices is None:
-            return self.observe_full_board()
-        
-        return self.observe_full_board()[indices]
+    def observe_board(self, player_id=None, indices=None) -> np.ndarray[np.float32]:
+        state = self.observe_full_board(player_id)
 
-    def observe_full_board(self) -> np.ndarray[np.float32]:
-        current_unit, player_id = self.get_current_unit()
+        if indices is None: return state
+        return state[indices]
+
+    def observe_full_board(self, player_id=None) -> np.ndarray[np.float32]:
+        current_unit, current_player_id = self.get_current_unit()
+        player_id = current_player_id if player_id is None else player_id
 
         state = np.zeros((self.state_channels, *self.board_shape), dtype=np.float32)
         ally_units = transform_matrix(self.board, lambda x, y, z: (z is not None) and (self.units_to_players[z] == player_id)).astype(bool)
@@ -275,8 +276,8 @@ class DnDBoard():
     def get_featuremap_names(self=None): 
         return ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health', 'Turn order']
 
-    def observe_board_dict(self) -> dict:
-        return { key: value for key, value in zip(self.get_featuremap_names(), self.observe_board()) }
+    def observe_board_dict(self, player_id=None) -> dict:
+        return { key: value for key, value in zip(self.get_featuremap_names(), self.observe_board(player_id)) }
 
 if __name__ == '__main__':
     from src.dnd.game_utils import print_game
