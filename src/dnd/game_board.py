@@ -1,4 +1,5 @@
 import numpy as np
+from enum import IntEnum
 import re
 from typing import List
 
@@ -22,6 +23,12 @@ class ActionError(Exception):
     'Raised if a selected action cannot be performed'
     pass
 
+class GameState(IntEnum):
+    PLAYING = 0
+    LOSE = 1
+    WIN = 2
+    DRAW = 3
+
 class DnDBoard():
     def __init__(self, board_dims: tuple[int, int]=(10, 10), reward_head=None):
         self.board_shape = board_dims
@@ -32,6 +39,7 @@ class DnDBoard():
         self.units: List[Unit] = []
         self.turn_order = None
         self.reward_head = DnDBoard.calculate_reward_classic if reward_head is None else reward_head
+        self.state_channels = 8
 
     def get_UIDs(self):
         return np.array([unit.get_UID() for unit in self.units])
@@ -190,20 +198,32 @@ class DnDBoard():
         
         return True
 
+    def get_game_state(self, player_id: int) -> GameState:
+        """Get current game state according to `player_id`"""
+        if len(self.units) == 0: return GameState.DRAW
+        
+        player_units = len(self.players_to_units[player_id])
+
+        if player_units == 0: return GameState.LOSE
+        if player_units == len(self.units): return GameState.WIN
+        return GameState.PLAYING
+
     def take_turn(self, new_position, action, skip_illegal=False):
         unit, player_id = self.get_current_unit()
 
         move_legal = self.check_move_legal(unit=unit, new_position=new_position, raise_on_illegal=not skip_illegal)
-        action_legal = self.check_action_legal(unit, new_position, action, raise_on_illegal=not skip_illegal)
+        actual_position = new_position if move_legal else self.get_unit_position(unit)
+        action_legal = self.check_action_legal(unit, actual_position, action, raise_on_illegal=not skip_illegal)
 
         if move_legal: self.move_unit(unit=unit, new_position=new_position, validate_move=False)
         if action_legal: self.invoke_action(unit, action, validate_action=False) 
         updates = self.update_board()
         self.advance_turn()
+        game_state = self.get_game_state(player_id)
 
-        return self.reward_head(self, unit, player_id, move_legal, action_legal, updates)
+        return self.reward_head(self, game_state, unit, player_id, move_legal, action_legal, updates)
     
-    def calculate_reward_classic(game, unit: Unit, player_id: int, move_legal: bool, action_legal: bool, updates: dict):
+    def calculate_reward_classic(game, game_state, unit: Unit, player_id: int, move_legal: bool, action_legal: bool, updates: dict):
         units_removed = updates['units_removed']
         # reward = -0.01
         # if not move_legal: reward -= 0.5
@@ -226,11 +246,18 @@ class DnDBoard():
         
         return reward, game_over
 
-    def observe_board(self) -> np.ndarray[np.float32]:
-        state_channels = 7
+    def passthrough_reward_head(game, *args): return args
+
+    def observe_board(self, indices=None) -> np.ndarray[np.float32]:
+        if indices is None:
+            return self.observe_full_board()
+        
+        return self.observe_full_board()[indices]
+
+    def observe_full_board(self) -> np.ndarray[np.float32]:
         current_unit, player_id = self.get_current_unit()
 
-        state = np.zeros((state_channels, *self.board_shape), dtype=np.float32)
+        state = np.zeros((self.state_channels, *self.board_shape), dtype=np.float32)
         ally_units = transform_matrix(self.board, lambda x, y, z: (z is not None) and (self.units_to_players[z] == player_id)).astype(bool)
         unit_position = to_tuple(self.get_unit_position(current_unit))
         
@@ -241,11 +268,12 @@ class DnDBoard():
         state[4] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].range)
         state[5] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].attack_damage)
         state[6] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.health)
+        state[7] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else (self.turn_order.index(self.units.index(z)) + 1) / len(self.units))
 
         return state
     
-    def get_featuremap_names(self): 
-        return ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health']
+    def get_featuremap_names(self=None): 
+        return ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health', 'Turn order']
 
     def observe_board_dict(self) -> dict:
         return { key: value for key, value in zip(self.get_featuremap_names(), self.observe_board()) }

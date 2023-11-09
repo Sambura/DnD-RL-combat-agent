@@ -93,7 +93,6 @@ def plot_training_history(iters,
         if not hasattr(ylim, '__len__'): plt.ylim(np.min(iters), ylim)
         else: plt.ylim(ylim)
     plt.xlim(xlim)
-    iters = iters[xlim[0]:xlim[1]]
 
     ax: plt.Axes = plt.gca()
     ax.plot(iters, label='Iterations', alpha=0.65)

@@ -52,7 +52,7 @@ class DnDAgent():
         self.optimizer = torch.optim.Adam(self.eval_model.parameters(), lr = lr)
 
         if self.dual_learning:
-            self.next_model = DnDEvalModel(self.in_channels, self.out_channels).train().to(self.device)
+            self.next_model = DnDEvalModel(self.in_channels, self.out_channels).eval().to(self.device)
         
         self.memory_position = 0
         self.memory_bound = 0
@@ -136,7 +136,7 @@ class DnDAgent():
         rewards = torch.tensor(self.reward_memory[batch_indices]).to(self.device)
         actions = self.actions_memory[batch_indices] # (batch_size, 2, 2)
         # TODO: do something with this??
-        game_overs = self.game_over_memory[batch_indices]
+        # game_overs = self.game_over_memory[batch_indices]
 
         q_evals = self.eval_model(states) # [B, 2, H, W]
         q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, 2, H*W]
@@ -151,6 +151,10 @@ class DnDAgent():
         loss.backward()
         self.optimizer.step()
         self.epsilon_step()
+
+    def set_lr(self, lr):
+        for g in self.optimizer.param_groups:
+            g['lr'] = lr
 
     def linear_epsilon_step(self) -> None:
         self.epsilon = max(self.epsilon - self.epsilon_delta, self.min_epsilon)

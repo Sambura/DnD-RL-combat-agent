@@ -99,3 +99,9 @@ def get_legal_moves(game: DnDBoard):
         return manhattan_distance(pos, (x, y)) <= current_unit.speed
     
     return transform_matrix(game.board, is_legal).astype(bool)
+
+def get_observation_indices(fnames: list[str]):
+    if fnames == None: return None
+    fmaps = DnDBoard.get_featuremap_names()
+
+    return  [fmaps.index(x) for x in fnames]
