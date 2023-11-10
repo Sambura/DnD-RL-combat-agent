@@ -7,6 +7,7 @@ class Unit:
         self.name = name
         self.speed = speed
         self.actions = []
+        self.pos = None
     
     def get_UID(self) -> int:
         return self.UID

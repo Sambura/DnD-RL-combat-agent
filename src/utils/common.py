@@ -16,7 +16,7 @@ def to_tuple(coords: any) -> tuple:
 
 def get_random_coords(max_y: int, max_x: int) -> tuple[int, int]:
     """Get a random coordinate on a board of size (max_y, max_x)"""
-    return (random.randrange(0, max_y), random.randrange(0, max_x))
+    return (random.randrange(max_y), random.randrange(max_x))
 
 def bytes_to_human_readable(bytes):
     if bytes < 1024:
@@ -39,8 +39,10 @@ def transform_matrix(matrix, func):
 
     return result_matrix
 
-def seed_everything(seed):
+def seed_everything(seed, deterministic_cudnn=False):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = deterministic_cudnn

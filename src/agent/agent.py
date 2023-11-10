@@ -11,7 +11,7 @@ import os
 class DnDAgent():
     def __init__(self,
                  board_shape: tuple[int, int], 
-                 in_channels: int=7, 
+                 in_channels: int=8, 
                  out_actions: int=2, 
                  lr: float=0.001, 
                  epsilon: float=0.99, 
@@ -23,7 +23,8 @@ class DnDAgent():
                  batch_size: int=128,
                  dual_learning: bool=False,
                  replace_model_interval: int=10000,
-                 loss_fn: Optional[nn.Module]=None) -> None:
+                 loss_fn: Optional[nn.Module]=None,
+                 random_action_resolver=None) -> None:
         """"""
         self.in_channels = in_channels
         self.out_channels = out_actions
@@ -38,6 +39,8 @@ class DnDAgent():
         self.replace_model_interval = replace_model_interval
         self.replace_model_counter = 0
         self.on_replace = None
+        self.random_action_resolver = self.get_default_radnom_action_resolver()
+        if random_action_resolver is not None: self.random_action_resolver = random_action_resolver
         
         epsilon_strategies = {
             'linear': self.linear_epsilon_step,
@@ -63,25 +66,29 @@ class DnDAgent():
         self.actions_memory = np.zeros(actions_shape, dtype=np.float32)
         self.reward_memory = np.zeros(memory_capacity, dtype=np.float32)
         self.game_over_memory = np.zeros(memory_capacity, dtype=np.bool_)
+        self.stripped = False
 
     def predict(self, state):
         with torch.no_grad(): # this just makes prediction a bit faster (I checked)
             return self.eval_model(torch.tensor(state).to(self.device).unsqueeze(0)).detach().cpu().numpy()[0]
     
-    def choose_action_vector(self, state, random_action_resolver: Optional[callable]=None):
+    def choose_action_vector(self, state):
         """
         Chooses `out_actions` tuples of integers based on the given board state.
         """
         if random.random() < self.epsilon:
-            if random_action_resolver is None:
-                return [get_random_coords(*self.board_shape) for _ in range(self.out_channels)]
-            else:
-                return random_action_resolver(state)
+            return self.random_action_resolver(state)
 
         output = self.predict(state)
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1), axis=1), output.shape[1:])
+    
+    def get_default_radnom_action_resolver(self):
+        def resolver(state):
+            return [get_random_coords(*state.shape[1:]) for _ in range(self.out_channels)]
+        return resolver
 
     def save_agent(self, path: str, only_models: bool=False) -> None:
+        assert self.stripped == False, 'Cannot save stripped agent'
         if not os.path.exists(path):
             os.makedirs(path, exist_ok=True)
 
@@ -93,7 +100,16 @@ class DnDAgent():
         torch.save(self.next_model.state_dict(), os.path.join(path, f'next_model.pt'))
         torch.save(self.optimizer.state_dict(), os.path.join(path, f'optimizer.pt'))
 
-    def load_agent(path: str):
+    def load_agent(path: str, strip: bool=False, **kwargs):
+        """
+        Loads the agent from the specified directory
+
+        Parameters:
+        path (str): the directory containing agent's save files
+        strip (bool): if True, sets the agent to evaluation mode, deleting most of its attributes \
+            to take less memory. Note that it is not possible to train a stripped agent.
+        **kwargs: list of agent's attributes whose value should be modified. i.e. `epsilon = 0`
+        """
         agent_path = os.path.join(path, 'agent.pkl')
 
         if not os.path.exists(agent_path):
@@ -103,8 +119,23 @@ class DnDAgent():
             agent = pickle.load(file)
         
         agent.eval_model.load_state_dict(torch.load(os.path.join(path, f'eval_model.pt')))
-        agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
-        agent.optimizer.load_state_dict(torch.load(os.path.join(path, f'optimizer.pt')))
+        if not strip:
+            agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
+            agent.optimizer.load_state_dict(torch.load(os.path.join(path, f'optimizer.pt')))
+        
+        if strip:
+            anames = ['eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device']
+
+            for x in agent.__dict__.copy():
+                if x in anames: continue
+                delattr(agent, x)
+
+            agent.stripped = True
+            agent.eval_model.eval()
+
+        for name, value in kwargs.items():
+            assert hasattr(agent, name), f'attribute {name} does not exist'
+            setattr(agent, name, value)
 
         return agent
 
@@ -178,8 +209,10 @@ class DnDAgent():
     def __getstate__(self):
         state = self.__dict__.copy()
         del state['on_replace']
+        del state['random_action_resolver']
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.on_replace = None
+        self.random_action_resolver = self.get_default_radnom_action_resolver()

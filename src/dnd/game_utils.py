@@ -1,3 +1,6 @@
+from copy import deepcopy
+from itertools import zip_longest
+
 from ..utils.common import *
 from .game_board import DnDBoard
 from .units import Unit
@@ -9,7 +12,6 @@ CCOLORS = {
     "Purple": "\033[95m",
     "Orange": "\033[93m",
     "Cyan": "\033[96m",
-    "Magenta": "\033[95m",
     "Reset": "\033[0m",
 }
 
@@ -57,15 +59,15 @@ def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
 
     print('\n')
 
-    unit, player_id = game.get_current_unit()
+    unit, player_id = game.current_unit, game.current_player_id
     color = unit_to_color[unit]
     print(f'Next move is by player #{player_id}: `{CCOLORS[color]}{unit.name}{CCOLORS["Reset"]}`')
 
 def take_turn(game: DnDBoard, new_coords, action, unit_to_color, skip_illegal=False, prnt_game=True, print_move=True):
-    unit, player_id = game.get_current_unit()
+    unit, player_id = game.current_unit, game.current_player_id
     color = unit_to_color[unit]
     if print_move: print(f'Turn made by player #{player_id}: `{CCOLORS[color]}{unit.name}{CCOLORS["Reset"]}`:')
-    old_coords = to_tuple(game.get_unit_position(unit))
+    old_coords = unit.pos
     new_coords = to_tuple(new_coords)
     if print_move: print(f'\tUnit {"moves" if old_coords != new_coords else "does not move"}: {old_coords} -> {new_coords};')
     if print_move:
@@ -91,17 +93,62 @@ def place_unit_randomly(game: DnDBoard, unit: Unit, player_id: int):
         return
 
 def get_legal_moves(game: DnDBoard):
-    current_unit, _ = game.get_current_unit()
-    pos = game.get_unit_position(current_unit)
+    current_unit = game.current_unit
 
     def is_legal(x, y, unit):
         if unit is not None and unit is not current_unit: return False
-        return manhattan_distance(pos, (x, y)) <= current_unit.speed
+        return manhattan_distance(current_unit.pos, (x, y)) <= current_unit.speed
     
     return transform_matrix(game.board, is_legal).astype(bool)
 
 def get_observation_indices(fnames: list[str]):
     if fnames == None: return None
-    fmaps = DnDBoard.get_featuremap_names()
 
-    return  [fmaps.index(x) for x in fnames]
+    return  [DnDBoard.CHANNEL_NAMES.index(x) for x in fnames]
+
+def generate_balanced_game(board_size, player_units, reward_head=None, player_count=2):
+    game = DnDBoard(board_size, reward_head=reward_head)
+    for unit, count in player_units:
+        for _ in range(count):
+            for player_id in range(player_count):
+                place_unit_randomly(game, deepcopy(unit), player_id)
+
+    game.initialize_game()
+    return game
+
+def decorate_game(game: DnDBoard, 
+                  rename_units: bool=True, 
+                  make_colormap: bool=True, 
+                  player_names: list[str]=['Ally', 'Enemy'],
+                  player_colors: list[list[str]]=[['Green', 'Blue', 'Cyan'], ['Red', 'Purple', 'Orange']]):
+    colormap = {}
+    color_index = 0
+    
+    if player_colors is None: player_colors = []
+    for units, player_name, colors in zip_longest(game.players_to_units.values(), player_names, player_colors):
+        names_to_units = {}
+        for unit in units:
+            if unit.name not in names_to_units: names_to_units[unit.name] = []
+            names_to_units[unit.name].append(unit)
+        
+        if make_colormap:
+            names_to_color = {}
+            if colors is not None: color_index = 0
+            if colors is None: colors = list(CCOLORS)
+            for name in names_to_units:
+                names_to_color[name] = colors[color_index]
+                color_index = (color_index + 1) % len(colors)
+            
+            for unit in units: colormap[unit] = names_to_color[unit.name]
+
+        if rename_units:
+            for name in names_to_units:
+                for index, unit in enumerate(names_to_units[name], 1):
+                    unit.name = f'{player_name} {name}'
+                    if len(names_to_units[name]) > 1:
+                        unit.name += f' {index}'
+    
+    if make_colormap:
+        return game, colormap
+    
+    return game

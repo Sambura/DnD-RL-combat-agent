@@ -20,8 +20,7 @@ class SwordAttack(Action):
         self.range = range
 
     def invoke(self, game, source_unit, target_unit, skip_illegal: bool):
-        unit_position = game.get_unit_position(source_unit)
-        if not self.check_action_legal(game, unit_position, source_unit, target_unit):
+        if not self.check_action_legal(game, source_unit.pos, source_unit, target_unit):
             if not skip_illegal: raise RuntimeError('Too far to attack')
             return None
         
@@ -31,8 +30,7 @@ class SwordAttack(Action):
         if source_unit is target_unit: return False
         if target_unit is None: return False
         
-        target_pos = game.get_unit_position(target_unit)
-        if manhattan_distance(target_pos, new_position) > self.range:
+        if manhattan_distance(target_unit.pos, new_position) > self.range:
              return False
         return True
     

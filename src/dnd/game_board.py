@@ -30,16 +30,21 @@ class GameState(IntEnum):
     DRAW = 3
 
 class DnDBoard():
+    'Number of channels returned by observe_full_board()'
+    STATE_CHANNEL_COUNT = 8
+    CHANNEL_NAMES = ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health', 'Turn order']
+
     def __init__(self, board_dims: tuple[int, int]=(10, 10), reward_head=None):
         self.board_shape = board_dims
-        self.board = np.zeros(board_dims, dtype=object)
+        self.board = np.zeros(board_dims, dtype=Unit)
         self.board.fill(None)
         self.players_to_units = {}
         self.units_to_players = {}
         self.units: List[Unit] = []
         self.turn_order = None
+        self.current_unit = None
+        self.current_player_id = None
         self.reward_head = DnDBoard.calculate_reward_classic if reward_head is None else reward_head
-        self.state_channels = 8
 
     def get_UIDs(self):
         return np.array([unit.get_UID() for unit in self.units])
@@ -47,12 +52,11 @@ class DnDBoard():
     def get_unit_by_UID(self, UID:str) -> Unit:
         return self.units[np.where(self.get_UIDs() == UID)[0][0]]
 
-    def assign_UID(self, position: IntPoint2d):
-        unit:Unit = self.board[position]
+    def assign_UID(self, unit: Unit):
         if unit is None:
             raise Exception('tried to asign UID to None unit')
         if unit.UID is not None:
-            raise Exception('tried to asign UID to unit that already have UID')
+            raise Exception('tried to asign UID to unit that already has UID')
         UIDs = self.get_UIDs().tolist() # tolist removes FutureWarning from numpy
         UID = unit.name
         splitted_label = list(filter(None, re.split(r'(\d+)', UID)))
@@ -62,13 +66,13 @@ class DnDBoard():
             except:
                 splitted_label.append('0')
             UID = ''.join(splitted_label)
-        self.board[position].UID = UID
+        unit.UID = UID
         
     def place_unit(self, unit: Unit, position: IntPoint2d, player_index: int, replace: bool=False):
         """
-            Places the given unit at specified position on the board
-            If `replace` is False, raises an error on attempt to replace
-            an existing unit
+        Places the given unit at specified position on the board
+        If `replace` is False, raises an error on attempt to replace
+        an existing unit
         """
         if unit in self.units_to_players:
             raise RuntimeError('The specified unit is already on the board')
@@ -76,21 +80,23 @@ class DnDBoard():
             raise RuntimeError('This position is already occupied')
         if self.turn_order is not None:
             raise NotImplementedError('Placing units after game initialization is not supported yet')
-        
-        self.board[position] = unit
-        self.assign_UID(position)
-        if player_index not in self.players_to_units: 
-            self.players_to_units[player_index] = []
+
+        self.assign_UID(unit)
+        self._place_unit(unit, position, player_index)
+    
+    def _place_unit(self, unit: Unit, position: IntPoint2d, player_index: int):
+        """Same as place_unit, but no check are performed, and the UID generation is different"""
+        self.board[position] = unit    
+        if player_index not in self.players_to_units: self.players_to_units[player_index] = []
         self.players_to_units[player_index].append(unit)
-        self.units_to_players[unit] = player_index
         self.units.append(unit)
+        unit.pos = to_tuple(position)
+        if unit.UID is None: unit.UID = id(unit) # TODO ideally this is not the way
+        self.units_to_players[unit] = player_index
 
     def is_occupied(self, position: IntPoint2d) -> bool:
         """Is the specified cell on the board occupied by a unit?""" 
         return self.board[position] is not None
-
-    def get_unit_position(self, unit: Unit):
-        return np.where(self.board == unit)
 
     def initialize_game(self, check_empty: bool=True):
         #TODO: check UIDs for uniquness
@@ -99,31 +105,19 @@ class DnDBoard():
             raise RuntimeError('The board is empty')
         
         # Assign turn order
-        self.turn_order = random.sample(list(range(len(self.units))), len(self.units))
-        self.current_turn_index = 0
-    
-    def get_current_unit(self) -> tuple[Unit, int]:
-        """
-            Returns tuple of (unit, player_id) for the current unit to take turn
-            and the player_id that owns the unit
-        """
-        if self.turn_order is None: raise RuntimeError('Game was not initialized')
-        unit = self.units[self.turn_order[self.current_turn_index]]
-        return unit, self.units_to_players[unit]
-    
-    def get_distance(self, unit1: Unit, unit2: Unit) -> int:
-        """Distance between units on the board"""
-        pos1 = self.get_unit_position(unit1)
-        pos2 = self.get_unit_position(unit2)
-        return manhattan_distance(pos1, pos2)
-    
-    def remove_unit(self, unit):
-        unit_pos = self.get_unit_position(unit)
+        self.set_turn_order(random.sample(list(range(len(self.units))), len(self.units)))
+        
+    def set_turn_order(self, turn_order: list[Unit], current_index: int=0):
+        self.turn_order = turn_order
+        self.current_turn_index = current_index - 1
+        self.advance_turn()
+
+    def _remove_unit(self, unit):
         player_id = self.units_to_players.pop(unit)
         unit_index = self.units.index(unit)
         self.units.remove(unit)
         self.players_to_units[player_id].remove(unit)
-        self.board[unit_pos] = None
+        self.board[unit.pos] = None
         unit_turn_index = self.turn_order.index(unit_index)
 
         if self.current_turn_index >= unit_turn_index:
@@ -143,38 +137,41 @@ class DnDBoard():
             if unit.is_alive(): continue
             to_remove.append((unit, self.units_to_players[unit]))
 
-        for unit, player_id in to_remove: self.remove_unit(unit)
+        for unit, player_id in to_remove: self._remove_unit(unit)
 
         return { 'units_removed': to_remove }
 
-    def move_unit(self, unit: Unit, new_position: IntPoint2d, validate_move: bool=True) -> None:
+    def move_unit(self, unit: Unit, new_position: IntPoint2d) -> None:
         """Move the given unit on the board to the specified position"""
-        if validate_move: self.check_move_legal(unit, new_position, raise_on_illegal=True)
-
-        unit_pos = self.get_unit_position(unit)
-        self.board[unit_pos] = None
+        self.check_move_legal(unit, new_position, raise_on_illegal=True)
+        self._move_unit(unit, to_tuple(new_position))
+    
+    def _move_unit(self, unit: Unit, new_position: tuple[int, int]) -> None:
+        self.board[unit.pos] = None
         self.board[new_position] = unit
+        unit.pos = new_position
 
     def invoke_action(self, unit: Unit, action: ActionInstance, validate_action: bool=True) -> None:
         """Invoke the given action with the given unit"""
         if action is None: return
-        if validate_action: self.check_action_legal(unit, self.get_unit_position(unit), action, raise_on_illegal=True)
+        if validate_action: self.check_action_legal(unit, unit.pos, action, raise_on_illegal=True)
         action.invoke(self, skip_illegal=not validate_action)
 
     def advance_turn(self) -> None:
         """Advance current turn index"""
-        self.current_turn_index = (self.current_turn_index + 1) % len(self.units)
+        self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
+        self.current_unit = self.units[self.turn_order[self.current_turn_index]]
+        self.current_player_id = self.units_to_players[self.current_unit]
 
     # Is moving a unit out of turn order illegal??
     def check_move_legal(self, unit: Unit, new_position: IntPoint2d, raise_on_illegal: bool=False) -> bool:
-        unit_position = self.get_unit_position(unit)
         target_cell = self.board[new_position]
 
         if target_cell is not None and target_cell is not unit:
             if raise_on_illegal: raise MovementError('Cell occupied')
             return False
 
-        if manhattan_distance(unit_position, new_position) > unit.speed:
+        if manhattan_distance(unit.pos, new_position) > unit.speed:
             if raise_on_illegal: raise MovementError('Too far')
             return False
         
@@ -209,13 +206,13 @@ class DnDBoard():
         return GameState.PLAYING
 
     def take_turn(self, new_position, action, skip_illegal=False):
-        unit, player_id = self.get_current_unit()
+        unit, player_id = self.current_unit, self.current_player_id
 
         move_legal = self.check_move_legal(unit=unit, new_position=new_position, raise_on_illegal=not skip_illegal)
-        actual_position = new_position if move_legal else self.get_unit_position(unit)
+        actual_position = new_position if move_legal else unit.pos
         action_legal = self.check_action_legal(unit, actual_position, action, raise_on_illegal=not skip_illegal)
 
-        if move_legal: self.move_unit(unit=unit, new_position=new_position, validate_move=False)
+        if move_legal: self._move_unit(unit=unit, new_position=new_position)
         if action_legal: self.invoke_action(unit, action, validate_action=False) 
         updates = self.update_board()
         self.advance_turn()
@@ -255,16 +252,14 @@ class DnDBoard():
         return state[indices]
 
     def observe_full_board(self, player_id=None) -> np.ndarray[np.float32]:
-        current_unit, current_player_id = self.get_current_unit()
-        player_id = current_player_id if player_id is None else player_id
+        player_id = self.current_player_id if player_id is None else player_id
 
-        state = np.zeros((self.state_channels, *self.board_shape), dtype=np.float32)
+        state = np.zeros((self.STATE_CHANNEL_COUNT, *self.board_shape), dtype=np.float32)
         ally_units = transform_matrix(self.board, lambda x, y, z: (z is not None) and (self.units_to_players[z] == player_id)).astype(bool)
-        unit_position = to_tuple(self.get_unit_position(current_unit))
         
         state[0] = ally_units
         state[1] = (self.board != None) ^ ally_units
-        state[2, unit_position[0], unit_position[1]] = 1 # [2, *unit_position] seems to cause some problems...
+        state[2, self.current_unit.pos[0], self.current_unit.pos[1]] = 1
         state[3] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.speed)
         state[4] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].range)
         state[5] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].attack_damage)
@@ -272,12 +267,9 @@ class DnDBoard():
         state[7] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else (self.turn_order.index(self.units.index(z)) + 1) / len(self.units))
 
         return state
-    
-    def get_featuremap_names(self=None): 
-        return ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health', 'Turn order']
 
     def observe_board_dict(self, player_id=None) -> dict:
-        return { key: value for key, value in zip(self.get_featuremap_names(), self.observe_board(player_id)) }
+        return { key: value for key, value in zip(self.CHANNEL_NAMES, self.observe_board(player_id)) }
 
 if __name__ == '__main__':
     from src.dnd.game_utils import print_game
