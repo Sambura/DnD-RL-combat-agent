@@ -1,4 +1,4 @@
-from ..dnd.game_board import DnDBoard
+from ..dnd.game_board import DnDBoard, GameState
 from ..dnd.actions import ActionInstance
 from ..utils.common import to_tuple, IntPoint2d, manhattan_distance, transform_matrix
 from ..dnd.game_utils import get_legal_moves, print_game, take_turn
@@ -58,17 +58,20 @@ def get_legal_action_resolver(board_size):
     
     return resolver
 
-def self_play_loop(agent: DnDAgent, 
-                   game: DnDBoard, 
-                   color_map: dict, 
-                   reset_epsilon: bool=True, 
-                   manual_input: bool=False, 
-                   delay: float=0.5) -> int:
+def agents_play_loop(agent1: DnDAgent, 
+                     agent2: DnDAgent, 
+                     game: DnDBoard, 
+                     color_map: dict,
+                     manual_input: bool=False, 
+                     delay: float=0.5,
+                     reset_epsilon: bool=True) -> int:
     game_over = False
     iter_count = 0
     if reset_epsilon:
-        epsilon = agent.epsilon
-        agent.epsilon = 0
+        epsilon1 = agent1.epsilon
+        agent1.epsilon = 0
+        epsilon2 = agent2.epsilon
+        agent2.epsilon = 0
 
     print_game(game, color_map)
     try:
@@ -88,14 +91,18 @@ def self_play_loop(agent: DnDAgent,
                 clear_output(wait=True)
                 print(f'Iteration: {iter_count}')
 
+                agent = agent1 if game.current_player_id == 0 else agent2
                 _, _, new_coords, action = get_states(game, agent)
-                _, game_over = take_turn(game, new_coords, action, color_map, True)
+                game_over = take_turn(game, new_coords, action, color_map, True)[0] != GameState.PLAYING
             except KeyboardInterrupt:
                 print(f'\nGame interrupted after {iter_count} iterations')
                 return None
     finally:
-        if reset_epsilon: agent.epsilon = epsilon
+        if reset_epsilon: 
+            agent1.epsilon = epsilon1
+            agent2.epsilon = epsilon2
 
-    print(f'\nGame over in {iter_count} iterations')
+    winner = 0 if len(game.players_to_units[1]) == 0 else 1
+    print(f'\nGame over in {iter_count} iterations. Winner: player #{winner + 1}')
 
-    return iter_count
+    return iter_count, winner

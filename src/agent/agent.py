@@ -8,6 +8,23 @@ import pickle
 import torch
 import os
 
+def get_default_radnom_action_resolver(board_shape, out_channels):
+    h, w = board_shape
+    def resolver(state):
+        return [get_random_coords(h, w) for _ in range(out_channels)]
+    
+    return resolver
+
+class RandomAgent():
+    def __init__(self, board_shape, out_actions: int=2, action_resolver=None):
+        self.board_shape = board_shape
+        self.out_channels = out_actions
+        self.random_action_resolver = get_default_radnom_action_resolver(board_shape, out_actions)
+        if action_resolver is not None: self.random_action_resolver = action_resolver
+
+    def choose_action_vector(self, state):
+        return self.random_action_resolver(state)
+
 class DnDAgent():
     def __init__(self,
                  board_shape: tuple[int, int], 
@@ -24,7 +41,8 @@ class DnDAgent():
                  dual_learning: bool=False,
                  replace_model_interval: int=10000,
                  loss_fn: Optional[nn.Module]=None,
-                 random_action_resolver=None) -> None:
+                 random_action_resolver=None,
+                 model_class: type=DnDEvalModel) -> None:
         """"""
         self.in_channels = in_channels
         self.out_channels = out_actions
@@ -39,7 +57,7 @@ class DnDAgent():
         self.replace_model_interval = replace_model_interval
         self.replace_model_counter = 0
         self.on_replace = None
-        self.random_action_resolver = self.get_default_radnom_action_resolver()
+        self.random_action_resolver = get_default_radnom_action_resolver(board_shape, out_actions)
         if random_action_resolver is not None: self.random_action_resolver = random_action_resolver
         
         epsilon_strategies = {
@@ -49,13 +67,13 @@ class DnDAgent():
         self.epsilon_step = epsilon_strategies[epsilon_strategy]
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.eval_model = DnDEvalModel(self.in_channels, self.out_channels).train().to(self.device)
+        self.eval_model = model_class(self.in_channels, self.out_channels).train().to(self.device)
         self.loss_fn = nn.MSELoss() if loss_fn is None else loss_fn
         self.next_model = self.eval_model
         self.optimizer = torch.optim.Adam(self.eval_model.parameters(), lr = lr)
 
         if self.dual_learning:
-            self.next_model = DnDEvalModel(self.in_channels, self.out_channels).eval().to(self.device)
+            self.next_model = model_class(self.in_channels, self.out_channels).eval().to(self.device)
         
         self.memory_position = 0
         self.memory_bound = 0
@@ -81,14 +99,8 @@ class DnDAgent():
 
         output = self.predict(state)
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1), axis=1), output.shape[1:])
-    
-    def get_default_radnom_action_resolver(self):
-        def resolver(state):
-            return [get_random_coords(*state.shape[1:]) for _ in range(self.out_channels)]
-        return resolver
 
     def save_agent(self, path: str, only_models: bool=False) -> None:
-        assert self.stripped == False, 'Cannot save stripped agent'
         if not os.path.exists(path):
             os.makedirs(path, exist_ok=True)
 
@@ -111,9 +123,6 @@ class DnDAgent():
         **kwargs: list of agent's attributes whose value should be modified. i.e. `epsilon = 0`
         """
         agent_path = os.path.join(path, 'agent.pkl')
-
-        if not os.path.exists(agent_path):
-            raise RuntimeError('Agent state was not found')
 
         with open(agent_path, 'rb') as file:
             agent = pickle.load(file)
@@ -208,11 +217,22 @@ class DnDAgent():
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        del state['on_replace']
-        del state['random_action_resolver']
+        for x in ['on_replace', 'random_action_resolver', 'eval_model', 'next_model', 'optimizer']:
+            state.pop(x)
+
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.on_replace = None
-        self.random_action_resolver = self.get_default_radnom_action_resolver()
+        self.random_action_resolver = get_default_radnom_action_resolver(self.board_shape, self.out_channels)
+        self.eval_model = DnDEvalModel(self.in_channels, self.out_channels).to(self.device).train()
+        self.next_model = DnDEvalModel(self.in_channels, self.out_channels).to(self.device).eval()
+        self.optimizer = torch.optim.Adam(self.eval_model.parameters())
+
+class IdleDnDAgent():
+    def choose_action_vector(self, state):
+        new_coords = np.where(state[2])
+        tys, txs = np.where(np.logical_or(state[0], state[1]) == 0)
+
+        return ((new_coords[0][0], tys[0]), (new_coords[1][0], txs[0]))

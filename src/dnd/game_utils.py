@@ -76,13 +76,13 @@ def take_turn(game: DnDBoard, new_coords, action, unit_to_color, skip_illegal=Fa
         else:
             print(f'\tAnd takes aciton `{action.action.name}` with attributes: {({key: str(value) for key, value in action.kwargs.items()})}')
 
-    reward, game_over = game.take_turn(new_coords, action, skip_illegal=skip_illegal)
+    turn_info = game.take_turn(new_coords, action, skip_illegal=skip_illegal)
 
     if prnt_game: 
         print()
         print_game(game, unit_to_color)
 
-    return reward, game_over
+    return turn_info
 
 def place_unit_randomly(game: DnDBoard, unit: Unit, player_id: int):
     while True:

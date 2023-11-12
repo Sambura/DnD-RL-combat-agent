@@ -114,10 +114,6 @@ def plot_training_history(iters,
         text_y = text_y_nml * yspan + y_min
         text_x = xlim[0] * 0.95 + xlim[1] * 0.05
         ax.text(text_x, text_y, f'avg = {avg:0.2f}', fontsize=14)
-
-    if checkpoints is not None:
-        for checkpoint in checkpoints:
-            ax.axvline(checkpoint, c='k', alpha=0.6, lw=1.5, linestyle='--')
     
     ax2 = None
     if eps is not None:
@@ -126,19 +122,21 @@ def plot_training_history(iters,
 
         for x, y in zip((artists, labels), ax2.get_legend_handles_labels()): x += y
 
-    if vlines is not None and len(vlines) > 0:
-        if not hasattr(vlines[0], '__len__'): vlines = [vlines]
+    if vlines is None: vlines = []
+    else: vlines = vlines.copy()
+    if len(vlines) > 0 and not hasattr(vlines[0], '__len__'): vlines = [vlines]
+    if checkpoints is not None: vlines.append({'data': checkpoints, 'c': 'k', 'alpha': 0.6, 'lw': 1.5, 'linestyle': '--'})
 
-        for vline in vlines:
-            if isinstance(vline, dict):
-                points = vline.pop('data')
-                kwargs = vline
-            else:
-                points = vline
-                kwargs = { 'c': 'red', 'lw': 1, 'linestyle': '--', 'alpha': 0.8}
-                
-            for point in points:
-                ax.axvline(point, **kwargs)
+    for vline in vlines:
+        if isinstance(vline, dict):
+            points = vline.pop('data')
+            kwargs = vline
+        else:
+            points = vline
+            kwargs = { 'c': 'red', 'lw': 1, 'linestyle': '--', 'alpha': 0.8}
+            
+        for point in points:
+            ax.axvline(point, **kwargs)
 
     ax.legend(artists, labels, loc='upper right')
 

@@ -30,8 +30,8 @@ class GameState(IntEnum):
     DRAW = 3
 
 class DnDBoard():
-    'Number of channels returned by observe_full_board()'
     STATE_CHANNEL_COUNT = 8
+    'Number of channels returned by observe_full_board()'
     CHANNEL_NAMES = ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health', 'Turn order']
 
     def __init__(self, board_dims: tuple[int, int]=(10, 10), reward_head=None):
@@ -44,7 +44,7 @@ class DnDBoard():
         self.turn_order = None
         self.current_unit = None
         self.current_player_id = None
-        self.reward_head = DnDBoard.calculate_reward_classic if reward_head is None else reward_head
+        self.reward_head = DnDBoard.__passthrough_reward_head if reward_head is None else reward_head
 
     def get_UIDs(self):
         return np.array([unit.get_UID() for unit in self.units])
@@ -219,31 +219,8 @@ class DnDBoard():
         game_state = self.get_game_state(player_id)
 
         return self.reward_head(self, game_state, unit, player_id, move_legal, action_legal, updates)
-    
-    def calculate_reward_classic(game, game_state, unit: Unit, player_id: int, move_legal: bool, action_legal: bool, updates: dict):
-        units_removed = updates['units_removed']
-        # reward = -0.01
-        # if not move_legal: reward -= 0.5
-        # if not action_legal: reward -= 0.25
-        # if action_legal: reward += 0.25
-        reward = 0
-        game_over = False
-        # reward for removing enemy units, 1 for each unit
-        reward += len([x for x in units_removed if x[1] != player_id])
-        # reward for defeating players
-        reward += 5 * len([x for x in units_removed if len(game.players_to_units[x[1]]) == 0 and x[1] != player_id])
-        # reward for winning
-        if len(game.players_to_units[player_id]) == len(game.units):
-            game_over = True
-            reward += 10
-        # penalty for losing (on your own turn ??)
-        if len(game.players_to_units[player_id]) == 0:
-            game_over = True
-            reward = -10
-        
-        return reward, game_over
 
-    def passthrough_reward_head(game, *args): return args
+    def __passthrough_reward_head(game, *args): return args
 
     def observe_board(self, player_id=None, indices=None) -> np.ndarray[np.float32]:
         state = self.observe_full_board(player_id)
@@ -270,6 +247,9 @@ class DnDBoard():
 
     def observe_board_dict(self, player_id=None) -> dict:
         return { key: value for key, value in zip(self.CHANNEL_NAMES, self.observe_board(player_id)) }
+    
+    # old agents require this function to exist to be loaded, but they don't actually use it
+    def calculate_reward_classic(): raise NotImplementedError()
 
 if __name__ == '__main__':
     from src.dnd.game_utils import print_game
