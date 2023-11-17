@@ -6,7 +6,7 @@ from typing import List
 if __name__ == '__main__':
     import sys
     from os import path
-    sys.path.append( path.dirname( path.dirname( path.abspath(__file__) ) ) )
+    sys.path.append( path.dirname( path.dirname( path.dirname( path.abspath(__file__) ) ) ) )
     from src.utils.common import * 
     from src.dnd.units import *
     from src.dnd.actions import ActionInstance
