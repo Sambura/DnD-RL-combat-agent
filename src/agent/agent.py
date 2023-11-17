@@ -57,6 +57,7 @@ class DnDAgent():
         self.replace_model_interval = replace_model_interval
         self.replace_model_counter = 0
         self.on_replace = None
+        self.model_class = model_class
         self.random_action_resolver = get_default_radnom_action_resolver(board_shape, out_actions)
         if random_action_resolver is not None: self.random_action_resolver = random_action_resolver
         
@@ -100,13 +101,12 @@ class DnDAgent():
         output = self.predict(state)
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1), axis=1), output.shape[1:])
 
-    def save_agent(self, path: str, only_models: bool=False) -> None:
+    def save_agent(self, path: str) -> None:
         if not os.path.exists(path):
             os.makedirs(path, exist_ok=True)
 
-        if not only_models:
-            with open(os.path.join(path, 'agent.pkl'), 'wb') as file:
-                pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
+        with open(os.path.join(path, 'agent.pkl'), 'wb') as file:
+            pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
         
         torch.save(self.eval_model.state_dict(), os.path.join(path, f'eval_model.pt'))
         torch.save(self.next_model.state_dict(), os.path.join(path, f'next_model.pt'))
@@ -126,6 +126,12 @@ class DnDAgent():
 
         with open(agent_path, 'rb') as file:
             agent = pickle.load(file)
+
+        if 'model_class' in kwargs: # delete these 5 lines asap
+            agent.model_class = kwargs['model_class']
+            agent.eval_model = agent.model_class(agent.in_channels, agent.out_channels).to(agent.device).train()
+            agent.next_model = agent.model_class(agent.in_channels, agent.out_channels).to(agent.device).eval()
+            agent.optimizer = torch.optim.Adam(agent.eval_model.parameters())
         
         agent.eval_model.load_state_dict(torch.load(os.path.join(path, f'eval_model.pt')))
         if not strip:
@@ -133,7 +139,7 @@ class DnDAgent():
             agent.optimizer.load_state_dict(torch.load(os.path.join(path, f'optimizer.pt')))
         
         if strip:
-            anames = ['eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device']
+            anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device']
 
             for x in agent.__dict__.copy():
                 if x in anames: continue
@@ -226,8 +232,9 @@ class DnDAgent():
         self.__dict__.update(state)
         self.on_replace = None
         self.random_action_resolver = get_default_radnom_action_resolver(self.board_shape, self.out_channels)
-        self.eval_model = DnDEvalModel(self.in_channels, self.out_channels).to(self.device).train()
-        self.next_model = DnDEvalModel(self.in_channels, self.out_channels).to(self.device).eval()
+        if not hasattr(self, 'model_class'): self.model_class = DnDEvalModel # delete this line asap
+        self.eval_model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()
+        self.next_model = self.model_class(self.in_channels, self.out_channels).to(self.device).eval()
         self.optimizer = torch.optim.Adam(self.eval_model.parameters())
 
 class IdleDnDAgent():
