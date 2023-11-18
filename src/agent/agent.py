@@ -109,8 +109,9 @@ class DnDAgent():
             pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
         
         torch.save(self.eval_model.state_dict(), os.path.join(path, f'eval_model.pt'))
-        torch.save(self.next_model.state_dict(), os.path.join(path, f'next_model.pt'))
         torch.save(self.optimizer.state_dict(), os.path.join(path, f'optimizer.pt'))
+        if self.dual_learning:
+            torch.save(self.next_model.state_dict(), os.path.join(path, f'next_model.pt'))
 
     def load_agent(path: str, strip: bool=False, **kwargs):
         """
@@ -130,13 +131,18 @@ class DnDAgent():
         if 'model_class' in kwargs: # delete these 5 lines asap
             agent.model_class = kwargs['model_class']
             agent.eval_model = agent.model_class(agent.in_channels, agent.out_channels).to(agent.device).train()
-            agent.next_model = agent.model_class(agent.in_channels, agent.out_channels).to(agent.device).eval()
-            agent.optimizer = torch.optim.Adam(agent.eval_model.parameters())
+            if not strip:
+                if agent.dual_learning:
+                    agent.next_model = agent.model_class(agent.in_channels, agent.out_channels).to(agent.device).eval()
+                else:
+                    agent.next_model = agent.eval_model
+                agent.optimizer = torch.optim.Adam(agent.eval_model.parameters())
         
         agent.eval_model.load_state_dict(torch.load(os.path.join(path, f'eval_model.pt')))
         if not strip:
-            agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
             agent.optimizer.load_state_dict(torch.load(os.path.join(path, f'optimizer.pt')))
+            if agent.dual_learning:
+                agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
         
         if strip:
             anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device']
@@ -177,12 +183,12 @@ class DnDAgent():
 
         batch_indices = np.random.choice(self.memory_bound, self.batch_size, replace=False)
 
-        states = torch.tensor(self.state_memory[batch_indices]).to(self.device)
-        new_states = torch.tensor(self.new_state_memory[batch_indices]).to(self.device)
-        rewards = torch.tensor(self.reward_memory[batch_indices]).to(self.device)
+        states = torch.tensor(self.state_memory[batch_indices], device=self.device)
+        new_states = torch.tensor(self.new_state_memory[batch_indices], device=self.device)
+        rewards = torch.tensor(self.reward_memory[batch_indices], device=self.device)
+        game_not_overs = torch.tensor(np.logical_not(self.game_over_memory[batch_indices]), device=self.device)
+        
         actions = self.actions_memory[batch_indices] # (batch_size, 2, 2)
-        # TODO: do something with this??
-        # game_overs = self.game_over_memory[batch_indices]
 
         q_evals = self.eval_model(states) # [B, 2, H, W]
         q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, 2, H*W]
@@ -191,7 +197,7 @@ class DnDAgent():
 
         q_target = torch.clone(q_evals)
         for i in range(self.out_channels):
-            q_target[batch_index, i, actions[:, 0, i], actions[:, 1, i]] = rewards + self.gamma * torch.max(q_nexts[:, i], dim=1)[0]
+            q_target[batch_index, i, actions[:, 0, i], actions[:, 1, i]] = rewards + self.gamma * torch.max(q_nexts[:, i], dim=1)[0] * game_not_overs
 
         loss = self.loss_fn(q_evals, q_target)
         loss.backward()

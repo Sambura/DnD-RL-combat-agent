@@ -76,7 +76,8 @@ def plot_training_history(iters,
                           checkpoints=None,
                           vlines=None,
                           xlim=None, 
-                          ylim=None, 
+                          ylim=None,
+                          min_ymax=None,
                           figsize=(11, 6), 
                           smoothness=[300, 3000], 
                           average_last=1000,
@@ -89,10 +90,15 @@ def plot_training_history(iters,
     else: xlim = list(xlim)
     if xlim[0] is None: xlim[0] = 0
     if xlim[1] is None: xlim[1] = len(iters)
-    if ylim is not None: 
-        if not hasattr(ylim, '__len__'): plt.ylim(np.min(iters), ylim)
-        else: plt.ylim(ylim)
+    if ylim is None:
+        y_min = np.min(iters)
+        y_range = np.mean(iters[-2000:]) - y_min
+        ylim = (y_min, np.max(iters) if min_ymax is None else max(min_ymax, y_min + y_range * 1.25))
+    elif not hasattr(ylim, '__len__'): 
+        ylim = (np.min(iters), ylim)
+
     plt.xlim(xlim)
+    plt.ylim(ylim)
 
     ax: plt.Axes = plt.gca()
     ax.plot(iters, label='Iterations', alpha=0.65)
@@ -138,7 +144,7 @@ def plot_training_history(iters,
         for point in points:
             ax.axvline(point, **kwargs)
 
-    ax.legend(artists, labels, loc='upper right')
+    ax.legend(artists, labels, loc='upper left')
 
     if show: plt.show()
     else: return (ax, ax2) if ax2 is not None else ax
