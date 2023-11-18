@@ -1,4 +1,4 @@
-from .actions import SwordAttack
+from .actions import MeleeWeaponAttack
 
 class Unit:
     def __init__(self, name, health, speed, UID) -> None:
@@ -37,4 +37,4 @@ class GenericSoldier(Unit):
                  name_postfix: str="",
                  UID=None) -> None:
         super().__init__(name + name_postfix, health, speed, UID)
-        self.actions.append(SwordAttack(attack_damage, range=range))
+        self.actions.append(MeleeWeaponAttack(attack_damage, range=range))
