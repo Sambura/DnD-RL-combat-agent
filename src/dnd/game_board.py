@@ -34,7 +34,7 @@ class DnDBoard():
     'Number of channels returned by observe_full_board()'
     CHANNEL_NAMES = ['Ally units', 'Enemy units', 'Current unit', 'Movement speed', 'Attack range', 'Attack damage', 'Health', 'Turn order']
 
-    def __init__(self, board_dims: tuple[int, int]=(10, 10), reward_head=None):
+    def __init__(self, board_dims: tuple[int, int]=(10, 10)):
         self.board_shape = board_dims
         self.board = np.zeros(board_dims, dtype=Unit)
         self.board.fill(None)
@@ -44,7 +44,7 @@ class DnDBoard():
         self.turn_order = None
         self.current_unit = None
         self.current_player_id = None
-        self.reward_head = DnDBoard.__passthrough_reward_head if reward_head is None else reward_head
+        self.current_movement_left = None
 
     def get_UIDs(self):
         return np.array([unit.get_UID() for unit in self.units])
@@ -100,6 +100,8 @@ class DnDBoard():
 
     def initialize_game(self, check_empty: bool=True):
         #TODO: check UIDs for uniquness
+        # reinitializing `units` is not really necessary but it does put the units in a specific order
+        # so it *might* be useful for cloning the game board
         self.units = self.board[self.board != None].flatten().tolist()
         if check_empty and len(self.units) == 0:
             raise RuntimeError('The board is empty')
@@ -110,14 +112,17 @@ class DnDBoard():
     def set_turn_order(self, turn_order: list[Unit], current_index: int=0):
         self.turn_order = turn_order
         self.current_turn_index = current_index - 1
-        self.advance_turn()
+        self.finish_turn()
 
-    def _remove_unit(self, unit):
+    def remove_unit(self, unit):
+        """Removes a unit from the board"""
         player_id = self.units_to_players.pop(unit)
         unit_index = self.units.index(unit)
         self.units.remove(unit)
         self.players_to_units[player_id].remove(unit)
         self.board[unit.pos] = None
+
+        if self.turn_order is None: return
         unit_turn_index = self.turn_order.index(unit_index)
 
         if self.current_turn_index >= unit_turn_index:
@@ -137,66 +142,76 @@ class DnDBoard():
             if unit.is_alive(): continue
             to_remove.append((unit, self.units_to_players[unit]))
 
-        for unit, player_id in to_remove: self._remove_unit(unit)
+        for unit, player_id in to_remove: self.remove_unit(unit)
 
         return { 'units_removed': to_remove }
-
-    def move_unit(self, unit: Unit, new_position: IntPoint2d) -> None:
-        """Move the given unit on the board to the specified position"""
-        self.check_move_legal(unit, new_position, raise_on_illegal=True)
-        self._move_unit(unit, to_tuple(new_position))
     
-    def _move_unit(self, unit: Unit, new_position: tuple[int, int]) -> None:
+    def move(self, new_position: IntPoint2d, raise_on_illegal: bool=True) -> tuple[bool, dict]:
+        """ 
+        Move the current unit to the specified position. If the move is illegal, it is \
+        either not performed, or an error is raised, depending on value of `raise_on_illegal`
+        """
+        new_position = to_tuple(new_position)
+        if not self.check_move_legal(new_position, raise_on_illegal=raise_on_illegal): return False, None
+        self.current_movement_left -= manhattan_distance(self.current_unit.pos, new_position)
+        self._set_unit_position(self.current_unit, new_position)
+        # updates = self.update_board()
+        return True, {}
+
+    def _set_unit_position(self, unit: Unit, new_position: tuple[int, int]) -> None:
+        """Set unit position on the board. No checks are performed"""
         self.board[unit.pos] = None
         self.board[new_position] = unit
         unit.pos = new_position
 
-    def invoke_action(self, unit: Unit, action: ActionInstance, validate_action: bool=True) -> None:
-        """Invoke the given action with the given unit"""
-        if action is None: return
-        if validate_action: self.check_action_legal(unit, unit.pos, action, raise_on_illegal=True)
-        action.invoke(self, skip_illegal=not validate_action)
+    def use_action(self, action: ActionInstance, raise_on_illegal: bool=True) -> tuple[bool, dict]:
+        """
+        Invoke the given action with a current unit. If the action is illegal, it is \
+        either not performed, or an error is raised, depending on value of `raise_on_illegal`
+        """
+        if not self.check_action_legal(action, raise_on_illegal=raise_on_illegal): return False, None
+        action.invoke(self)
+        updates = self.update_board()
 
-    def advance_turn(self) -> None:
-        """Advance current turn index"""
+        return True, updates
+
+    def finish_turn(self) -> None:
+        """Finish the current turn and move on to the next one"""
         self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
         self.current_unit = self.units[self.turn_order[self.current_turn_index]]
         self.current_player_id = self.units_to_players[self.current_unit]
+        self.current_movement_left = self.current_unit.speed
 
-    # Is moving a unit out of turn order illegal??
-    def check_move_legal(self, unit: Unit, new_position: IntPoint2d, raise_on_illegal: bool=False) -> bool:
+    def check_move_legal(self, new_position: IntPoint2d, raise_on_illegal: bool=False) -> bool:
+        """Check if the current unit can move to the specified position"""
         target_cell = self.board[new_position]
 
-        if target_cell is not None and target_cell is not unit:
+        if target_cell is not None and target_cell is not self.current_unit:
             if raise_on_illegal: raise MovementError('Cell occupied')
             return False
 
-        if manhattan_distance(unit.pos, new_position) > unit.speed:
+        if manhattan_distance(self.current_unit.pos, new_position) > self.current_movement_left:
             if raise_on_illegal: raise MovementError('Too far')
             return False
         
         return True
     
-    def check_action_legal(self, 
-                           unit: Unit,
-                           new_position: IntPoint2d, 
-                           action: ActionInstance, 
-                           raise_on_illegal: bool=False) -> bool:
-        """Check whether the given unit at the given position can perform the given action"""
-        if action is None or action.action is None: return True # ???
+    def check_action_legal(self, action: ActionInstance, raise_on_illegal: bool=False) -> bool:
+        """Check whether the current unit can perform the given action"""
+        if action.action is None: return True # ???
 
-        if action.action not in unit.actions:
+        if action.action not in self.current_unit.actions:
             if raise_on_illegal: raise ActionError('The action does not belong to the selected unit')
             return False
         
-        if not action.check_action_legal(self, new_position):
+        if not action.check_action_legal(self):
             if raise_on_illegal: raise ActionError('The action is illegal')
             return False
         
         return True
 
     def get_game_state(self, player_id: int) -> GameState:
-        """Get current game state according to `player_id`"""
+        """Get current game state according to `player_id`: Playing, Win, Lose, or Draw"""
         if len(self.units) == 0: return GameState.DRAW
         
         player_units = len(self.players_to_units[player_id])
@@ -204,23 +219,6 @@ class DnDBoard():
         if player_units == 0: return GameState.LOSE
         if player_units == len(self.units): return GameState.WIN
         return GameState.PLAYING
-
-    def take_turn(self, new_position, action, skip_illegal=False):
-        unit, player_id = self.current_unit, self.current_player_id
-
-        move_legal = self.check_move_legal(unit=unit, new_position=new_position, raise_on_illegal=not skip_illegal)
-        actual_position = new_position if move_legal else unit.pos
-        action_legal = self.check_action_legal(unit, actual_position, action, raise_on_illegal=not skip_illegal)
-
-        if move_legal: self._move_unit(unit=unit, new_position=new_position)
-        if action_legal: self.invoke_action(unit, action, validate_action=False) 
-        updates = self.update_board()
-        self.advance_turn()
-        game_state = self.get_game_state(player_id)
-
-        return self.reward_head(self, game_state, unit, player_id, move_legal, action_legal, updates)
-
-    def __passthrough_reward_head(game, *args): return args
 
     def observe_board(self, player_id=None, indices=None) -> np.ndarray[np.float32]:
         state = self.observe_full_board(player_id)

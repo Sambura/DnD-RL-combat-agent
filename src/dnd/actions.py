@@ -19,20 +19,11 @@ class SwordAttack(Action):
         self.attack_damage = attack_damage
         self.range = range
 
-    def invoke(self, game, source_unit, target_unit, skip_illegal: bool):
-        if not self.check_action_legal(game, source_unit.pos, source_unit, target_unit):
-            if not skip_illegal: raise RuntimeError('Too far to attack')
-            return None
-        
+    def invoke(self, game, source_unit, target_unit):
         target_unit.take_damage(self.attack_damage)
 
-    def check_action_legal(self, game, new_position, source_unit, target_unit):
-        if source_unit is target_unit: return False
-        if target_unit is None: return False
-        
-        if manhattan_distance(target_unit.pos, new_position) > self.range:
-             return False
-        return True
+    def check_action_legal(self, game, source_unit, target_unit):
+        return (target_unit is not None) and (manhattan_distance(source_unit.pos, target_unit.pos) <= self.range)
     
 class ActionInstance:
     """
@@ -42,10 +33,10 @@ class ActionInstance:
         self.action = action
         self.kwargs = kwargs
 
-    def check_action_legal(self, game, new_position): 
+    def check_action_legal(self, game): 
         if self.action is None: return True
-        return self.action.check_action_legal(game, new_position, **self.kwargs)
+        return self.action.check_action_legal(game, **self.kwargs)
     
-    def invoke(self, game, skip_illegal):
+    def invoke(self, game):
         if self.action is None: return None
-        return self.action.invoke(game, **self.kwargs, skip_illegal=skip_illegal)
+        return self.action.invoke(game, **self.kwargs)
