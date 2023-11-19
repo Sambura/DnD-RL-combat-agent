@@ -46,6 +46,7 @@ class DnDBoard():
         self.current_player_id = None
         self.current_movement_left = None
         self.reacted_list = []
+        self.used_action = False
 
     def get_UIDs(self):
         return np.array([unit.get_UID() for unit in self.units])
@@ -199,9 +200,13 @@ class DnDBoard():
         Invoke the given action with a current unit. If the action is illegal, it is \
         either not performed, or an error is raised, depending on value of `raise_on_illegal`
         """
+        if self.used_action:
+            if raise_on_illegal: raise ActionError('Cannot make multiple actions on one turn')
+            return False, None
         if not self.check_action_legal(action, raise_on_illegal=raise_on_illegal): return False, None
         action.invoke(self)
         updates = self.update_board()
+        self.used_action = True
 
         return True, updates
 
@@ -212,6 +217,7 @@ class DnDBoard():
         self.current_player_id = self.units_to_players[self.current_unit]
         self.current_movement_left = self.current_unit.speed
         self.reacted_list.clear()
+        self.used_action = False
 
     def check_move_legal(self, new_position: IntPoint2d, raise_on_illegal: bool=False) -> bool:
         """Check if the current unit can move to the specified position"""
