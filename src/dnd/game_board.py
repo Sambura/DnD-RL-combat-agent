@@ -45,6 +45,7 @@ class DnDBoard():
         self.current_unit = None
         self.current_player_id = None
         self.current_movement_left = None
+        self.reacted_list = []
 
     def get_UIDs(self):
         return np.array([unit.get_UID() for unit in self.units])
@@ -146,6 +147,28 @@ class DnDBoard():
 
         return { 'units_removed': to_remove }
     
+    def get_reaction_list(self):
+        """Get the list of melee units that have the current unit in their attack range"""
+        reaction = []
+        
+        for player_id, units in self.players_to_units.items():
+            if player_id == self.current_player_id: continue
+
+            for unit in units:
+                meleeAction = None
+                for action in unit.actions:
+                    # TODO: Change identification of melee units
+                    if isinstance(action, SwordAttack) and action.range < 2:
+                        meleeAction = action
+                        break
+                if meleeAction is None: continue
+                if manhattan_distance(self.current_unit.pos, unit.pos) > meleeAction.range: continue
+                if unit in self.reacted_list: continue
+
+                reaction.append((unit, meleeAction))
+
+        return reaction
+    
     def move(self, new_position: IntPoint2d, raise_on_illegal: bool=True) -> tuple[bool, dict]:
         """ 
         Move the current unit to the specified position. If the move is illegal, it is \
@@ -154,9 +177,16 @@ class DnDBoard():
         new_position = to_tuple(new_position)
         if not self.check_move_legal(new_position, raise_on_illegal=raise_on_illegal): return False, None
         self.current_movement_left -= manhattan_distance(self.current_unit.pos, new_position)
-        self._set_unit_position(self.current_unit, new_position)
-        # updates = self.update_board()
-        return True, {}
+        
+        reaction_list = self.get_reaction_list()
+        for unit, meleeAction in reaction_list:
+            if manhattan_distance(new_position, unit.pos) <= meleeAction.range: continue
+            self.current_unit.take_damage(meleeAction.attack_damage)
+            self.reacted_list.append(unit)
+
+        self._set_unit_position(self.current_unit, new_position)    
+        updates = self.update_board()
+        return True, updates
 
     def _set_unit_position(self, unit: Unit, new_position: tuple[int, int]) -> None:
         """Set unit position on the board. No checks are performed"""
@@ -181,6 +211,7 @@ class DnDBoard():
         self.current_unit = self.units[self.turn_order[self.current_turn_index]]
         self.current_player_id = self.units_to_players[self.current_unit]
         self.current_movement_left = self.current_unit.speed
+        self.reacted_list.clear()
 
     def check_move_legal(self, new_position: IntPoint2d, raise_on_illegal: bool=False) -> bool:
         """Check if the current unit can move to the specified position"""
