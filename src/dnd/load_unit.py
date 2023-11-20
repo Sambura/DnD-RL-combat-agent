@@ -28,11 +28,11 @@ def parse_json(json_path:str):
 def load_unit(json_path:str, rollHP=False) -> Unit:
   data = parse_json(json_path)
   battleStats = data['battleStats']
-  AC = data['AC'] #TODO
+  AC = battleStats['AC']
   HP = roll(battleStats['HP']) if rollHP else roll_avg(battleStats['HP'])
   cellSpeed = battleStats['speed']//5 #5 feet per cell
   attacks = data['battleStats']['attacks']
-  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, UID=None)
+  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, AC=AC, UID=None)
   
   for attack in attacks:
     if attack['type'] == 'meleeWeaponAttack':
@@ -71,15 +71,15 @@ def getTokenName(json_path:str) -> str:
   data = parse_json(json_path)
   return data['tokenName']
 
-def load_renderUnit(json_path:str, pos: Tuple[int, int]) -> RenderUnit:
-  token = Image.open(getTokenImagePath(json_path))
+def load_renderUnit(json_path:str, pos: Tuple[int, int], gradio = True) -> RenderUnit:
+  token = Image.open(getTokenImagePath(json_path, gradio=gradio))
   renderUnit = RenderUnit(pos=pos, token=token, unitUID=None)
   return renderUnit
 
 if __name__ == '__main__':
   # print(listdir('Tokens'))
   unit:Unit = load_unit('Tokens/Zombie.json')
-  renderUnit:RenderUnit = load_renderUnit('Tokens/Zombie.json', pos=(0,0))
+  renderUnit:RenderUnit = load_renderUnit('Tokens/Zombie.json', pos=(0,0), gradio=False)
   print(unit.actions)
   # renderUnit.token.show()
 
