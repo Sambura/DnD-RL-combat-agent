@@ -1,8 +1,9 @@
 from PIL import Image
+from typing import Tuple
 import numpy as np
 
 class RenderUnit:
-    def __init__(self, unitUID: int, pos: tuple, token: Image) -> None:
+    def __init__(self, unitUID: int, pos: Tuple[int, int], token: Image) -> None:
         self.unitUID = unitUID
         self.pos = np.array(pos, dtype = int)
         self.token = token
