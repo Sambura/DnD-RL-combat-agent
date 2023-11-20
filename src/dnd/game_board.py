@@ -56,9 +56,9 @@ class DnDBoard():
 
     def assign_UID(self, unit: Unit):
         if unit is None:
-            raise Exception('tried to asign UID to None unit')
+            raise Exception('tried to assign UID to None unit')
         if unit.UID is not None:
-            raise Exception('tried to asign UID to unit that already has UID')
+            raise Exception('tried to assign UID to unit that already has UID')
         UIDs = self.get_UIDs().tolist() # tolist removes FutureWarning from numpy
         UID = unit.name
         splitted_label = list(filter(None, re.split(r'(\d+)', UID)))
@@ -101,7 +101,7 @@ class DnDBoard():
         return self.board[position] is not None
 
     def initialize_game(self, check_empty: bool=True):
-        #TODO: check UIDs for uniquness
+        #TODO: check UIDs for uniqueness
         # reinitializing `units` is not really necessary but it does put the units in a specific order
         # so it *might* be useful for cloning the game board
         self.units = self.board[self.board != None].flatten().tolist()
