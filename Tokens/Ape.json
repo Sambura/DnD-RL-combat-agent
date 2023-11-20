@@ -1,0 +1,27 @@
+{
+	"tokenName": "Ape",
+  "tokenImage": "Ape.png",
+  "battleStats": {
+    "CR": 0.5,
+    "AC": 12,
+    "init": 2,
+    "HP": "3d8+6",
+    "speed": 30,
+    "attacks": [
+      {
+        "type": "meleeWeaponAttack",
+        "name": "Fist",
+        "range": 5,
+        "hit": 5,
+        "damage": "2d6+6"
+      },
+      {
+        "type": "rangedWeaponAttack",
+        "name": "Rock",
+        "range": 25,
+        "hit": 5,
+        "damage": "1d6+3"
+      }
+    ]
+  }
+}
