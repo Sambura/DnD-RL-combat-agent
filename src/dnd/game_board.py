@@ -159,7 +159,7 @@ class DnDBoard():
                 meleeAction = None
                 for action in unit.actions:
                     # TODO: Change identification of melee units
-                    if isinstance(action, SwordAttack) and action.range < 2:
+                    if isinstance(action, MeleeWeaponAttack) and action.range < 2:
                         meleeAction = action
                         break
                 if meleeAction is None: continue
