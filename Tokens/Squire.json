@@ -2,6 +2,7 @@
 	"tokenName": "Squire",
   "tokenImage": "Squire.png",
   "battleStats": {
+    "CR": 0.25,
     "AC": 12,
     "init": 0,
     "HP": "2d8+2",
