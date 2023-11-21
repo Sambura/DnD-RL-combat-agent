@@ -8,7 +8,8 @@ class Unit:
         self.speed = speed
         self.actions = []
         self.pos = None
-        self.AC = AC
+        self.AC = AC # TODO: rename?
+        self.melee_attack = None
     
     def get_UID(self) -> int:
         return self.UID
@@ -16,17 +17,16 @@ class Unit:
     def take_damage(self, damage):
         self.health -= damage
 
+    def add_action(self, action):
+        # TODO: handle multiple different MeleeWeaponAttack's ??
+        if isinstance(action, MeleeWeaponAttack): 
+            self.melee_attack = action
+
+        self.actions.append(action)
+
     def is_alive(self): return self.health > 0
 
     def __str__(self): return self.name
-    
-    def __hash__(self) -> int:
-        return hash(self.UID)
-
-    def __eq__(self, __value: object) -> bool:
-        if isinstance(__value, Unit):
-            return self.UID == __value.UID
-        return NotImplemented
 
 class GenericSoldier(Unit):
     def __init__(self, 
@@ -39,4 +39,4 @@ class GenericSoldier(Unit):
                  AC:int=10,
                  UID:int=None) -> None:
         super().__init__(name + name_postfix, health, speed, AC, UID)
-        self.actions.append(MeleeWeaponAttack(-1, attack_damage=attack_damage, range=range))
+        self.add_action(MeleeWeaponAttack(-1, attack_damage=attack_damage, range=range))

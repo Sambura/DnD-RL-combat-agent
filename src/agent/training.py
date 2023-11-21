@@ -52,7 +52,9 @@ def calculate_reward_classic(game, game_state, unit: Unit, player_id: int, move_
     if len(game.players_to_units[player_id]) == len(game.units):
         reward += 10
     # penalty for losing (on your own turn ??)
-    if len(game.players_to_units[player_id]) == 0:
-        reward = -100
+    # apparently penalizing -100 for losing makes model diverge rapidly
+    #if len(game.players_to_units[player_id]) == 0:
+    #    reward = -100
+    #    pass
     
     return reward

@@ -36,25 +36,25 @@ def load_unit(json_path:str, rollHP=False) -> Unit:
   
   for attack in attacks:
     if attack['type'] == 'meleeWeaponAttack':
-      unit.actions.append(MeleeWeaponAttack(hit=attack['hit'],
-                                            attack_damage=attack['damage'],
-                                            range=attack['range']//5, 
-                                            name=attack['name']))
+      unit.add_action(MeleeWeaponAttack(hit=attack['hit'],
+                                        attack_damage=attack['damage'],
+                                        range=attack['range']//5, 
+                                        name=attack['name']))
     elif attack['type'] == 'rangedWeaponAttack':
-      unit.actions.append(RangedWeaponAttack(hit=attack['hit'],
-                                            attack_damage=attack['damage'],
-                                            range=attack['range']//5, 
-                                            name=attack['name']))
+      unit.add_action(RangedWeaponAttack(hit=attack['hit'],
+                                         attack_damage=attack['damage'],
+                                         range=attack['range']//5, 
+                                         name=attack['name']))
     elif attack['type'] == 'meleeSpellAttack':
-      unit.actions.append(MeleeSpellAttack(hit=attack['hit'],
-                                           attack_damage=attack['damage'],
-                                           range=attack['range']//5, 
-                                           name=attack['name']))
+      unit.add_action(MeleeSpellAttack(hit=attack['hit'],
+                                       attack_damage=attack['damage'],
+                                       range=attack['range']//5, 
+                                       name=attack['name']))
     elif attack['type'] == 'rangedSpellAttack':
-      unit.actions.append(RangedSpellAttack(hit=attack['hit'],
-                                            attack_damage=attack['damage'],
-                                            range=attack['range']//5, 
-                                            name=attack['name']))
+      unit.add_action(RangedSpellAttack(hit=attack['hit'],
+                                        attack_damage=attack['damage'],
+                                        range=attack['range']//5, 
+                                        name=attack['name']))
     else:
       raise KeyError("Tried importing unknown attack type") 
   return unit
