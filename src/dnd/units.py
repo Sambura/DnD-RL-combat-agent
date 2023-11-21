@@ -39,4 +39,4 @@ class GenericSoldier(Unit):
                  AC:int=10,
                  UID:int=None) -> None:
         super().__init__(name + name_postfix, health, speed, AC, UID)
-        self.actions.append(MeleeWeaponAttack(attack_damage, range=range))
+        self.actions.append(MeleeWeaponAttack(-1, attack_damage=attack_damage, range=range))

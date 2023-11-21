@@ -14,7 +14,7 @@ class Action:
         raise NotImplementedError()
 
 class Attack(Action):
-    def __init__(self, hit:int, attack_damage: int, range: int, name: str):
+    def __init__(self, hit: int, attack_damage: int, range: int, name: str):
         super().__init__(name)
         self.hit = hit
         self.attack_damage = attack_damage

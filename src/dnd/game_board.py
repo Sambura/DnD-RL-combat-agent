@@ -156,17 +156,12 @@ class DnDBoard():
             if player_id == self.current_player_id: continue
 
             for unit in units:
-                meleeAction = None
-                for action in unit.actions:
-                    # TODO: Change identification of melee units
-                    if isinstance(action, SwordAttack) and action.range < 2:
-                        meleeAction = action
-                        break
-                if meleeAction is None: continue
-                if manhattan_distance(self.current_unit.pos, unit.pos) > meleeAction.range: continue
+                melee_action = next((x for x in unit.actions if isinstance(x, MeleeWeaponAttack)), None)
+                if manhattan_distance(self.current_unit.pos, unit.pos) > melee_action.range: continue
+                if melee_action is None: continue
                 if unit in self.reacted_list: continue
 
-                reaction.append((unit, meleeAction))
+                reaction.append((unit, melee_action))
 
         return reaction
     
