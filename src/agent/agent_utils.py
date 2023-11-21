@@ -1,7 +1,7 @@
 from ..dnd.game_board import DnDBoard, GameState
 from ..dnd.actions import ActionInstance
 from ..utils.common import to_tuple, IntPoint2d, manhattan_distance, transform_matrix
-from ..dnd.game_utils import get_legal_moves, print_game, take_turn
+from ..dnd.game_utils import get_legal_moves, print_game, print_move, print_action
 from .agent import DnDAgent
 from IPython.display import clear_output
 import numpy as np
@@ -88,12 +88,21 @@ def agents_play_loop(agent1: DnDAgent,
                 else:
                     time.sleep(delay)
                 
-                clear_output(wait=True)
+                clear_output(wait=False)
                 print(f'Iteration: {iter_count}')
 
                 agent = agent1 if game.current_player_id == 0 else agent2
                 _, _, new_coords, action = get_states(game, agent)
-                game_over = take_turn(game, new_coords, action, color_map, True)[0] != GameState.PLAYING
+                old_coords = game.current_unit.pos
+                move_legal, _ = game.move(new_coords, raise_on_illegal=False)
+                action_legal, _ = game.use_action(action, raise_on_illegal=False)
+                game.finish_turn()
+                game_over = game.get_game_state() != GameState.PLAYING
+
+                print_move(old_coords, new_coords, move_legal)
+                print_action(action, action_legal)
+                print_game(game, color_map)
+
             except KeyboardInterrupt:
                 print(f'\nGame interrupted after {iter_count} iterations')
                 return None
