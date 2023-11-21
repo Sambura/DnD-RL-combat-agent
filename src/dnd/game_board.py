@@ -120,7 +120,7 @@ class DnDBoard():
         """Removes a unit from the board"""
         player_id = self.units_to_players.pop(unit)
         unit_index = self.units.index(unit)
-        self.units.remove(unit)
+        del self.units[unit_index]
         self.players_to_units[player_id].remove(unit)
         self.board[unit.pos] = None
 
@@ -130,7 +130,7 @@ class DnDBoard():
         if self.current_turn_index >= unit_turn_index:
             self.current_turn_index -= 1
 
-        self.turn_order.remove(unit_index)
+        del self.turn_order[unit_turn_index]
 
         for i in range(len(self.turn_order)):
             if self.turn_order[i] < unit_index: continue
@@ -221,6 +221,10 @@ class DnDBoard():
 
     def check_move_legal(self, new_position: IntPoint2d, raise_on_illegal: bool=False) -> bool:
         """Check if the current unit can move to the specified position"""
+        if not self.current_unit.is_alive(): 
+            if raise_on_illegal: raise MovementError('Current unit is dead')
+            return False
+
         target_cell = self.board[new_position]
 
         if target_cell is not None and target_cell is not self.current_unit:
@@ -235,6 +239,10 @@ class DnDBoard():
     
     def check_action_legal(self, action: ActionInstance, raise_on_illegal: bool=False) -> bool:
         """Check whether the current unit can perform the given action"""
+        if not self.current_unit.is_alive(): 
+            if raise_on_illegal: raise ActionError('Current unit is dead')
+            return False
+
         if action.action is None: return True # ???
 
         if action.action not in self.current_unit.actions:
@@ -247,7 +255,7 @@ class DnDBoard():
         
         return True
 
-    def get_game_state(self, player_id: int) -> GameState:
+    def get_game_state(self, player_id: int=0) -> GameState:
         """Get current game state according to `player_id`: Playing, Win, Lose, or Draw"""
         if len(self.units) == 0: return GameState.DRAW
         
