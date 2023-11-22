@@ -49,13 +49,14 @@ class DnDBoard():
         self.reacted_list = []
         self.used_action = False
 
-    def get_UIDs(self):
+    def get_UIDs(self) -> List[int]:
         return np.array([unit.get_UID() for unit in self.units])
 
     def get_unit_by_UID(self, UID:str) -> Unit:
         return self.units[np.where(self.get_UIDs() == UID)[0][0]]
 
-    def assign_UID(self, unit: Unit):
+    def assign_UID(self, unit: Unit) -> None:
+        """Assigns UID based on the name of the unit"""
         if unit is None:
             raise Exception('tried to assign UID to None unit')
         if unit.UID is not None:
@@ -71,7 +72,7 @@ class DnDBoard():
             UID = ''.join(splitted_label)
         unit.UID = UID
         
-    def place_unit(self, unit: Unit, position: IntPoint2d, player_index: int, replace: bool=False):
+    def place_unit(self, unit: Unit, position: IntPoint2d, player_index: int, replace: bool=False, generateUID:bool = True):
         """
         Places the given unit at specified position on the board
         If `replace` is False, raises an error on attempt to replace
@@ -84,7 +85,8 @@ class DnDBoard():
         if self.turn_order is not None:
             raise NotImplementedError('Placing units after game initialization is not supported yet')
 
-        self.assign_UID(unit)
+        if generateUID:
+            self.assign_UID(unit)
         self._place_unit(unit, position, player_index)
         self.units.append(unit) # for more interactivity in case it is needed
     
