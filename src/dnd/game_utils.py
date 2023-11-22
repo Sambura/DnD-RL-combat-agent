@@ -74,6 +74,15 @@ def print_action(action, action_successful=None):
     attibutes = {key: str(value) for key, value in action.kwargs.items()}
     print(f'\tUnit takes aciton `{action.action.name}` with attributes: {attibutes}{success_info};')
 
+def print_turn_info(turn_info):
+    for action, kwargs, success in turn_info:
+        if action == 'move':
+            print_move(kwargs['from'], kwargs['to'], success)
+        elif action == 'action':
+            print_action(kwargs['action'], success)
+        elif action == 'pass':
+            print('Unit finishes turn')
+
 def place_unit_randomly(game: DnDBoard, unit: Unit, player_id: int):
     while True:
         coords = get_random_coords(*game.board_shape)
