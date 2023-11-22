@@ -88,7 +88,7 @@ def place_unit_randomly(game: DnDBoard, unit: Unit, player_id: int):
         coords = get_random_coords(*game.board_shape)
         if game.is_occupied(coords): continue
 
-        game.place_unit(unit, coords, player_id)
+        game._place_unit(unit, coords, player_id)
         return
 
 def get_legal_moves(game: DnDBoard):

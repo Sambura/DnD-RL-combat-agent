@@ -104,8 +104,9 @@ def get_legal_action_resolver(board_size, sequential_actions=False):
             if can_move:
                 occupied = np.logical_or(state[0], state[1])
                 possible_positions = np.where(np.logical_and(distance <= remaining_speed, occupied == 0))
-                pos_index = random.randrange(len(possible_positions[0]))
-                return (0, possible_positions[0][pos_index], possible_positions[1][pos_index])
+                if len(possible_positions[0]) > 0:
+                    pos_index = random.randrange(len(possible_positions[0]))
+                    return (0, possible_positions[0][pos_index], possible_positions[1][pos_index])
 
         return (2, *get_random_coords(board_size[0], board_size[1]))
 
