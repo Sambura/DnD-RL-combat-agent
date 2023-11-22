@@ -63,26 +63,16 @@ def print_game(game: DnDBoard, unit_to_color: dict[Unit, str]) -> None:
     color = unit_to_color[unit]
     print(f'Next move is by player #{player_id}: `{CCOLORS[color]}{unit.name}{CCOLORS["Reset"]}`')
 
-def take_turn(game: DnDBoard, new_coords, action, unit_to_color, skip_illegal=False, prnt_game=True, print_move=True):
-    unit, player_id = game.current_unit, game.current_player_id
-    color = unit_to_color[unit]
-    if print_move: print(f'Turn made by player #{player_id}: `{CCOLORS[color]}{unit.name}{CCOLORS["Reset"]}`:')
-    old_coords = unit.pos
+def print_move(old_coords, new_coords, move_successful=None):
+    old_coords = to_tuple(old_coords)
     new_coords = to_tuple(new_coords)
-    if print_move: print(f'\tUnit {"moves" if old_coords != new_coords else "does not move"}: {old_coords} -> {new_coords};')
-    if print_move:
-        if action is None:
-            print('\tAnd does not take any action!')
-        else:
-            print(f'\tAnd takes aciton `{action.action.name}` with attributes: {({key: str(value) for key, value in action.kwargs.items()})}')
+    success_info = '' if move_successful is None else f' [{"not " if not move_successful else ""}successful]'
+    print(f'\tUnit {"moves" if old_coords != new_coords else "does not move"}: {old_coords} -> {new_coords}{success_info};')
 
-    turn_info = game.take_turn(new_coords, action, skip_illegal=skip_illegal)
-
-    if prnt_game: 
-        print()
-        print_game(game, unit_to_color)
-
-    return turn_info
+def print_action(action, action_successful=None):
+    success_info = '' if action_successful is None else f' [{"not " if not action_successful else ""}successful]'
+    attibutes = {key: str(value) for key, value in action.kwargs.items()}
+    print(f'\tUnit takes aciton `{action.action.name}` with attributes: {attibutes}{success_info};')
 
 def place_unit_randomly(game: DnDBoard, unit: Unit, player_id: int):
     while True:
@@ -106,8 +96,8 @@ def get_observation_indices(fnames: list[str]):
 
     return  [DnDBoard.CHANNEL_NAMES.index(x) for x in fnames]
 
-def generate_balanced_game(board_size, player_units, reward_head=None, player_count=2):
-    game = DnDBoard(board_size, reward_head=reward_head)
+def generate_balanced_game(board_size, player_units, player_count=2):
+    game = DnDBoard(board_size)
     for unit, count in player_units:
         for _ in range(count):
             for player_id in range(player_count):
@@ -152,3 +142,10 @@ def decorate_game(game: DnDBoard,
         return game, colormap
     
     return game
+
+def merge_game_updates(*args):
+    units_removed = []
+    for update in args:
+        if update is not None: units_removed += update['units_removed']
+
+    return { 'units_removed': units_removed }

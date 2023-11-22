@@ -14,55 +14,46 @@ class Action:
         raise NotImplementedError()
 
 class Attack(Action):
-    def __init__(self, hit:int, attack_damage: int, range: int, name: str):
+    def __init__(self, hit: int, attack_damage: int, range: int, name: str):
         super().__init__(name)
         self.hit = hit
         self.attack_damage = attack_damage
         self.range = range
         
-    def invoke(self, game, source_unit, target_unit, skip_illegal: bool):
-        if not self.check_action_legal(game, source_unit.pos, source_unit, target_unit):
-            if not skip_illegal: raise RuntimeError('Too far to attack')
-            return None
-        
+    def invoke(self, game, source_unit, target_unit):
         target_unit.take_damage(self.attack_damage) #TODO include AC in damage calculation
 
-    def check_action_legal(self, game, new_position, source_unit, target_unit):
-        if source_unit is target_unit: return False
-        if target_unit is None: return False
-        
-        if manhattan_distance(target_unit.pos, new_position) > self.range:
-             return False
-        return True
+    def check_action_legal(self, game, source_unit, target_unit):
+        return (target_unit is not None) and (manhattan_distance(source_unit.pos, target_unit.pos) <= self.range)
 
-class MeleeWeaponAttack(Attack):
-    def __init__(self, hit:int, attack_damage: int, range: int=1, name: str='Sword attack'):
-        super().__init__(hit, attack_damage, range, name)
     
+class MeleeWeaponAttack(Attack):
+    def __init__(self, hit: int, attack_damage: int, range: int=1, name: str='Sword attack'):
+        super().__init__(hit, attack_damage, range, name)
+        
 class RangedWeaponAttack(Attack):
-    def __init__(self, hit:int, attack_damage: int, range: int=15, name: str='Bow attack'):
+    def __init__(self, hit: int, attack_damage: int, range: int=15, name: str='Bow attack'):
         super().__init__(hit, attack_damage, range, name)
 
 class MeleeSpellAttack(Attack):
-    def __init__(self, hit:int, attack_damage: int, range: int=1, name: str='Shocking Grasp attack'):
+    def __init__(self, hit: int, attack_damage: int, range: int=1, name: str='Shocking Grasp attack'):
         super().__init__(hit, attack_damage, range, name)
     
 class RangedSpellAttack(Attack):
-    def __init__(self, hit:int, attack_damage: int, range: int=15, name: str='Firebolt attack'):
+    def __init__(self, hit: int, attack_damage: int, range: int=15, name: str='Firebolt attack'):
         super().__init__(hit, attack_damage, range, name)
 
 class ActionInstance:
     """
-    An action along with the required parameters. Used to make a move
+    Basically a container that holds an action and a dict of parameters \
+    required to invoke the action. i.e. source_unit and target_unit for attacks
     """
     def __init__(self, action = None, **kwargs):
         self.action = action
         self.kwargs = kwargs
 
-    def check_action_legal(self, game, new_position): 
-        if self.action is None: return True
-        return self.action.check_action_legal(game, new_position, **self.kwargs)
+    def check_action_legal(self, game): 
+        return self.action.check_action_legal(game, **self.kwargs)
     
-    def invoke(self, game, skip_illegal):
-        if self.action is None: return None
-        return self.action.invoke(game, **self.kwargs, skip_illegal=skip_illegal)
+    def invoke(self, game):
+        return self.action.invoke(game, **self.kwargs)

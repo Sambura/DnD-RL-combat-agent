@@ -1,11 +1,13 @@
 from ..dnd.game_board import DnDBoard, GameState
+from ..dnd.game_utils import merge_game_updates
 from .agent import DnDAgent
 from .agent_utils import get_states
 from ..dnd.units import Unit
 from typing import Optional
 
 def train_loop_trivial(agent: DnDAgent, 
-                       game: DnDBoard, 
+                       game: DnDBoard,
+                       reward_fn: callable,
                        iter_limit: int=10000) -> int:
     """
     The simplest training loop for DnDAgent. As the new state, agent remembers the state of the \
@@ -21,10 +23,16 @@ def train_loop_trivial(agent: DnDAgent,
     """
     for iter_count in range(iter_limit):
         state, action_vector, new_coords, action = get_states(game, agent)
-        player_id = game.current_player_id
-
-        reward, game_over = game.take_turn(new_coords, action, skip_illegal=True)
+        unit, player_id = game.current_unit, game.current_player_id
+        
+        move_legal, updates1 = game.move(new_coords, raise_on_illegal=False)
+        action_legal, updates2 = game.use_action(action, raise_on_illegal=False)
+        game.finish_turn()
+        updates = merge_game_updates(updates1, updates2)
+        game_state = game.get_game_state(player_id)
+        reward = reward_fn(game, game_state, unit, player_id, move_legal, action_legal, updates)
         new_state = game.observe_board(player_id)
+        game_over = game_state != GameState.PLAYING
 
         agent.memorize(state, action_vector, reward, new_state, game_over)
         agent.learn()
@@ -32,33 +40,6 @@ def train_loop_trivial(agent: DnDAgent,
         if game_over: return iter_count + 1
     
     raise RuntimeError('Iteration limit exceeded')
-
-def train_loop_delayed(agent: DnDAgent, game: DnDBoard) -> int:
-    game_over = False
-    iter_count = 0
-    
-    last_state, last_reward, last_action = None, None, None
-    while not game_over:
-        iter_count += 1
-    
-        state, action_vector, new_coords, action = get_states(game, agent)
-        reward, game_over = game.take_turn(new_coords, action, skip_illegal=True)
-        new_state = game.observe_board()
-
-        ## THIS IS WRONG, FIX REWARD
-        if last_state is not None:
-            total_reward = last_reward - reward
-            agent.memorize(last_state, last_action, total_reward, new_state, game_over)
-            
-        if game_over:
-            agent.memorize(state, action_vector, reward, new_state, game_over)
-        
-        agent.learn()
-        last_state = state
-        last_action = action_vector
-        last_reward = reward
-
-    return iter_count
 
 def calculate_reward_classic(game, game_state, unit: Unit, player_id: int, move_legal: bool, action_legal: bool, updates: dict):
     units_removed = updates['units_removed']
@@ -71,7 +52,9 @@ def calculate_reward_classic(game, game_state, unit: Unit, player_id: int, move_
     if len(game.players_to_units[player_id]) == len(game.units):
         reward += 10
     # penalty for losing (on your own turn ??)
-    if len(game.players_to_units[player_id]) == 0:
-        reward = -100
+    # apparently penalizing -100 for losing makes model diverge rapidly
+    #if len(game.players_to_units[player_id]) == 0:
+    #    reward = -100
+    #    pass
     
-    return reward, game_state != GameState.PLAYING
+    return reward
