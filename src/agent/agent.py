@@ -1,4 +1,4 @@
-from ..utils.common import bytes_to_human_readable, get_random_coords
+from ..utils.common import bytes_to_human_readable, get_random_coords, get_random_coords_3d
 from .deep_q_network import DnDEvalModel
 from torch import nn
 import numpy as np
@@ -8,18 +8,22 @@ import pickle
 import torch
 import os
 
-def get_default_radnom_action_resolver(board_shape, out_channels):
+def get_default_random_action_resolver(board_shape, out_channels, sequential_actions):
     h, w = board_shape
+
+    def sequential_resolver(state):
+        return get_random_coords_3d(out_channels, h, w)
+
     def resolver(state):
         return [get_random_coords(h, w) for _ in range(out_channels)]
     
-    return resolver
+    return sequential_resolver if sequential_actions else resolver
 
 class RandomAgent():
     def __init__(self, board_shape, out_actions: int=2, action_resolver=None):
         self.board_shape = board_shape
         self.out_channels = out_actions
-        self.random_action_resolver = get_default_radnom_action_resolver(board_shape, out_actions)
+        self.random_action_resolver = get_default_random_action_resolver(board_shape, out_actions)
         if action_resolver is not None: self.random_action_resolver = action_resolver
 
     def choose_action_vector(self, state):
@@ -28,9 +32,9 @@ class RandomAgent():
 class DnDAgent():
     def __init__(self,
                  board_shape: tuple[int, int], 
-                 in_channels: int=8, 
-                 out_actions: int=2, 
-                 lr: float=0.001, 
+                 in_channels: int, 
+                 out_actions: int, 
+                 lr: float=0.001,
                  epsilon: float=0.99, 
                  min_epsilon: float=0.01, 
                  epsilon_delta: float=1e-5, 
@@ -42,7 +46,8 @@ class DnDAgent():
                  replace_model_interval: int=10000,
                  loss_fn: Optional[nn.Module]=None,
                  random_action_resolver=None,
-                 model_class: type=DnDEvalModel) -> None:
+                 model_class: type[nn.Module]=DnDEvalModel,
+                 sequential_actions: bool=False) -> None:
         """"""
         self.in_channels = in_channels
         self.out_channels = out_actions
@@ -58,7 +63,8 @@ class DnDAgent():
         self.replace_model_counter = 0
         self.on_replace = None
         self.model_class = model_class
-        self.random_action_resolver = get_default_radnom_action_resolver(board_shape, out_actions)
+        self.sequential_actions = sequential_actions
+        self.random_action_resolver = get_default_random_action_resolver(board_shape, out_actions, sequential_actions)
         if random_action_resolver is not None: self.random_action_resolver = random_action_resolver
         
         epsilon_strategies = {
@@ -71,7 +77,7 @@ class DnDAgent():
         self.eval_model = model_class(self.in_channels, self.out_channels).train().to(self.device)
         self.loss_fn = nn.MSELoss() if loss_fn is None else loss_fn
         self.next_model = self.eval_model
-        self.optimizer = torch.optim.Adam(self.eval_model.parameters(), lr = lr)
+        self.optimizer = torch.optim.Adam(self.eval_model.parameters(), lr=lr)
 
         if self.dual_learning:
             self.next_model = model_class(self.in_channels, self.out_channels).eval().to(self.device)
@@ -79,7 +85,10 @@ class DnDAgent():
         self.memory_position = 0
         self.memory_bound = 0
         state_shape = (memory_capacity, self.in_channels, *board_shape)
-        actions_shape = (memory_capacity, self.out_channels, 2) # 2 - [x, y] coordinates
+        if sequential_actions:
+            actions_shape = (memory_capacity, 3) # action plane + 2 : [x, y] coordinates
+        else:
+            actions_shape = (memory_capacity, self.out_channels, 2) # 2 - [x, y] coordinates
         self.state_memory = np.zeros(state_shape, dtype=np.float32)
         self.new_state_memory = np.zeros(state_shape, dtype=np.float32)
         self.actions_memory = np.zeros(actions_shape, dtype=np.float32)
@@ -100,6 +109,13 @@ class DnDAgent():
 
         output = self.predict(state)
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1), axis=1), output.shape[1:])
+    
+    def choose_single_action(self, state):
+        if random.random() < self.epsilon:
+            return self.random_action_resolver(state)
+
+        output = self.predict(state)
+        return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1)), output.shape)
 
     def save_agent(self, path: str) -> None:
         if not os.path.exists(path):
@@ -145,7 +161,7 @@ class DnDAgent():
                 agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
         
         if strip:
-            anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device']
+            anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device', 'sequential_actions']
 
             for x in agent.__dict__.copy():
                 if x in anames: continue
@@ -164,11 +180,15 @@ class DnDAgent():
         self.state_memory[self.memory_position] = state
         self.reward_memory[self.memory_position] = reward
         self.new_state_memory[self.memory_position] = new_state
-        self.game_over_memory[self.memory_position] = game_over
+        self.game_over_memory[self.memory_position] = not game_over
         self.actions_memory[self.memory_position] = actions
 
         self.memory_position = (self.memory_position + 1) % self.memory_capacity
         self.memory_bound = max(self.memory_bound, self.memory_position) 
+
+    def clear_memory(self):
+        self.memory_position = 0
+        self.memory_bound = 0
 
     def learn(self):
         if self.memory_bound < self.batch_size: return
@@ -186,18 +206,22 @@ class DnDAgent():
         states = torch.tensor(self.state_memory[batch_indices], device=self.device)
         new_states = torch.tensor(self.new_state_memory[batch_indices], device=self.device)
         rewards = torch.tensor(self.reward_memory[batch_indices], device=self.device)
-        game_not_overs = torch.tensor(np.logical_not(self.game_over_memory[batch_indices]), device=self.device)
+        game_not_overs = torch.tensor(self.game_over_memory[batch_indices], device=self.device)
         
         actions = self.actions_memory[batch_indices] # (batch_size, 2, 2)
 
-        q_evals = self.eval_model(states) # [B, 2, H, W]
-        q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, 2, H*W]
+        q_evals = self.eval_model(states) # [B, out_channeles, H, W]
+        q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, out_channeles, H*W]
 
         batch_index = np.arange(self.batch_size, dtype=np.int32)
 
         q_target = torch.clone(q_evals)
-        for i in range(self.out_channels):
-            q_target[batch_index, i, actions[:, 0, i], actions[:, 1, i]] = rewards + self.gamma * torch.max(q_nexts[:, i], dim=1)[0] * game_not_overs
+        if self.sequential_actions: # actions: [B, 3]
+            q_nexts = q_nexts.view(self.batch_size, -1) # [B, out_channeles * H * W]
+            q_target[batch_index, actions[:, 0], actions[:, 1], actions[:, 2]] = rewards + self.gamma * torch.max(q_nexts, dim=1)[0] * game_not_overs
+        else:
+            for i in range(self.out_channels):
+                q_target[batch_index, i, actions[:, 0, i], actions[:, 1, i]] = rewards + self.gamma * torch.max(q_nexts[:, i], dim=1)[0] * game_not_overs
 
         loss = self.loss_fn(q_evals, q_target)
         loss.backward()
@@ -237,7 +261,7 @@ class DnDAgent():
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.on_replace = None
-        self.random_action_resolver = get_default_radnom_action_resolver(self.board_shape, self.out_channels)
+        self.random_action_resolver = get_default_random_action_resolver(self.board_shape, self.out_channels, self.sequential_actions)
         if not hasattr(self, 'model_class'): self.model_class = DnDEvalModel # delete this line asap
         self.eval_model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()
         self.next_model = self.model_class(self.in_channels, self.out_channels).to(self.device).eval()

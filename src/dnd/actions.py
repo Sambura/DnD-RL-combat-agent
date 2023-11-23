@@ -25,6 +25,9 @@ class Attack(Action):
 
     def check_action_legal(self, game, source_unit, target_unit):
         return (target_unit is not None) and (manhattan_distance(source_unit.pos, target_unit.pos) <= self.range)
+    
+    def instantiate(self, source_unit, target_unit):
+        return ActionInstance(self, source_unit=source_unit, target_unit=target_unit)
 
     
 class MeleeWeaponAttack(Attack):
@@ -48,7 +51,7 @@ class ActionInstance:
     Basically a container that holds an action and a dict of parameters \
     required to invoke the action. i.e. source_unit and target_unit for attacks
     """
-    def __init__(self, action = None, **kwargs):
+    def __init__(self, action: Action, **kwargs):
         self.action = action
         self.kwargs = kwargs
 
@@ -57,3 +60,6 @@ class ActionInstance:
     
     def invoke(self, game):
         return self.action.invoke(game, **self.kwargs)
+
+    def __str__(self):
+        return f'{self.action.name}: {({x:str(y) for x, y in self.kwargs.items()})}'

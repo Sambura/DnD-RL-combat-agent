@@ -18,6 +18,10 @@ def get_random_coords(max_y: int, max_x: int) -> tuple[int, int]:
     """Get a random coordinate on a board of size (max_y, max_x)"""
     return (random.randrange(max_y), random.randrange(max_x))
 
+def get_random_coords_3d(max_y: int, max_x: int, max_z: int) -> tuple[int, int, int]:
+    """Get a random coordinate on a board of size (max_y, max_x)"""
+    return (random.randrange(max_y), random.randrange(max_x), random.randrange(max_z))
+
 def bytes_to_human_readable(bytes):
     if bytes < 1024:
         return f'{bytes} bytes'

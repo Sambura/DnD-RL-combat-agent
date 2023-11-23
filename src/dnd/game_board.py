@@ -217,7 +217,10 @@ class DnDBoard():
 
         target_cell = self.board[new_position]
 
-        if target_cell is not None and target_cell is not self.current_unit:
+        # It is possible that `target_cell` == `current_unit`, which techincally should be legal,
+        # however as far as I see there is no real benefit in making such a move legal. Also,
+        # currenlty training algorithms benefit from this move being illegal
+        if target_cell is not None:
             if raise_on_illegal: raise MovementError('Cell occupied')
             return False
 
@@ -231,7 +234,7 @@ class DnDBoard():
         """Check whether the current unit can perform the given action"""
         if self.used_action:
             if raise_on_illegal: raise ActionError('Cannot make multiple actions on one turn')
-            return False, None
+            return False
 
         if not self.current_unit.is_alive(): 
             if raise_on_illegal: raise ActionError('Current unit is dead')
