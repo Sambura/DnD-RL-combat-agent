@@ -30,6 +30,10 @@ class RandomAgent():
         return self.random_action_resolver(state)
 
 class DnDAgent():
+    BASE_ATTRS = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 
+                  'out_channels', 'device', 'sequential_actions', 'random_action_resolver']
+    """Attributes that should not be stripped upon loading agent"""
+
     def __init__(self,
                  board_shape: tuple[int, int], 
                  in_channels: int, 
@@ -161,10 +165,8 @@ class DnDAgent():
                 agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
         
         if strip:
-            anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device', 'sequential_actions']
-
             for x in agent.__dict__.copy():
-                if x in anames: continue
+                if x in DnDAgent.BASE_ATTRS: continue
                 delattr(agent, x)
 
             agent.stripped = True
@@ -261,6 +263,7 @@ class DnDAgent():
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.on_replace = None
+        if not hasattr(self, 'sequential_actions'): self.sequential_actions = False
         self.random_action_resolver = get_default_random_action_resolver(self.board_shape, self.out_channels, self.sequential_actions)
         if not hasattr(self, 'model_class'): self.model_class = DnDEvalModel # delete this line asap
         self.eval_model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()

@@ -47,7 +47,8 @@ def train_loop_trivial(agent: DnDAgent,
 def train_loop_sequential_V1(agent: DnDAgent, 
                              game: DnDBoard,
                              reward_fn: callable,
-                             iter_limit: int=10000) -> int:
+                             iter_limit: int=10000,
+                             do_learn: bool=True) -> int:
     if not agent.sequential_actions:
         raise RuntimeWarning('Provided agent is incompatible with this train loop')
 
@@ -78,13 +79,13 @@ def train_loop_sequential_V1(agent: DnDAgent,
             new_state = game.observe_board(player_id)
             game_over = game_state != GameState.PLAYING
             agent.memorize(state, action_vector, reward, new_state, game_over)
-            agent.learn()
+            if do_learn: agent.learn()
+
+            if game_over: return iter_count + 1
 
             if finish_turn: break
 
         game.finish_turn()
-
-        if game_over: return iter_count + 1
     
     raise RuntimeError('Iteration limit exceeded')
 
