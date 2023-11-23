@@ -8,7 +8,7 @@ import pickle
 import torch
 import os
 
-def get_default_radnom_action_resolver(board_shape, out_channels, sequential_actions):
+def get_default_random_action_resolver(board_shape, out_channels, sequential_actions):
     h, w = board_shape
 
     def sequential_resolver(state):
@@ -23,7 +23,7 @@ class RandomAgent():
     def __init__(self, board_shape, out_actions: int=2, action_resolver=None):
         self.board_shape = board_shape
         self.out_channels = out_actions
-        self.random_action_resolver = get_default_radnom_action_resolver(board_shape, out_actions)
+        self.random_action_resolver = get_default_random_action_resolver(board_shape, out_actions)
         if action_resolver is not None: self.random_action_resolver = action_resolver
 
     def choose_action_vector(self, state):
@@ -64,7 +64,7 @@ class DnDAgent():
         self.on_replace = None
         self.model_class = model_class
         self.sequential_actions = sequential_actions
-        self.random_action_resolver = get_default_radnom_action_resolver(board_shape, out_actions, sequential_actions)
+        self.random_action_resolver = get_default_random_action_resolver(board_shape, out_actions, sequential_actions)
         if random_action_resolver is not None: self.random_action_resolver = random_action_resolver
         
         epsilon_strategies = {
@@ -161,7 +161,7 @@ class DnDAgent():
                 agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
         
         if strip:
-            anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device']
+            anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device', 'sequential_actions']
 
             for x in agent.__dict__.copy():
                 if x in anames: continue
@@ -185,6 +185,10 @@ class DnDAgent():
 
         self.memory_position = (self.memory_position + 1) % self.memory_capacity
         self.memory_bound = max(self.memory_bound, self.memory_position) 
+
+    def clear_memory(self):
+        self.memory_position = 0
+        self.memory_bound = 0
 
     def learn(self):
         if self.memory_bound < self.batch_size: return
@@ -257,7 +261,7 @@ class DnDAgent():
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.on_replace = None
-        self.random_action_resolver = get_default_radnom_action_resolver(self.board_shape, self.out_channels)
+        self.random_action_resolver = get_default_random_action_resolver(self.board_shape, self.out_channels, self.sequential_actions)
         if not hasattr(self, 'model_class'): self.model_class = DnDEvalModel # delete this line asap
         self.eval_model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()
         self.next_model = self.model_class(self.in_channels, self.out_channels).to(self.device).eval()
