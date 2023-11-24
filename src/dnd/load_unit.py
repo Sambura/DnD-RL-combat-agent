@@ -13,13 +13,12 @@ if __name__ == '__main__':
     from src.gui.adapters import RenderUnit 
     from src.dnd.units import Unit
     from src.dnd.actions import *
+    from src.utils.common import roll_avg
 else: 
     from ..gui.adapters import RenderUnit
+    from ..utils.common import roll_avg
     from .units import Unit
     from .actions import *
-
-def roll_avg(string:str) -> int:
-  return math.ceil((roll_min(string) + roll_max(string))/2)
 
 def parse_json(json_path:str):
  with open(json_path) as f:
@@ -28,11 +27,12 @@ def parse_json(json_path:str):
 def load_unit(json_path:str, rollHP=False) -> Unit:
   data = parse_json(json_path)
   battleStats = data['battleStats']
+  CR = battleStats['CR']
   AC = battleStats['AC']
   HP = roll(battleStats['HP']) if rollHP else roll_avg(battleStats['HP'])
   cellSpeed = battleStats['speed']//5 #5 feet per cell
   attacks = data['battleStats']['attacks']
-  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, AC=AC, UID=None)
+  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, AC=AC, UID=None, CR = CR)
   
   for attack in attacks:
     if attack['type'] == 'meleeWeaponAttack':
@@ -59,7 +59,7 @@ def load_unit(json_path:str, rollHP=False) -> Unit:
       raise KeyError("Tried importing unknown attack type") 
   return unit
 
-def getTokenImagePath(json_path:str, gradio = True) -> Image:
+def getTokenImagePath(json_path:str, gradio = False) -> Image:
   data = parse_json(json_path)
   if gradio:
     json_folder = 'Tokens'
@@ -71,7 +71,7 @@ def getTokenName(json_path:str) -> str:
   data = parse_json(json_path)
   return data['tokenName']
 
-def load_renderUnit(json_path:str, pos: Tuple[int, int], gradio = True) -> RenderUnit:
+def load_renderUnit(json_path:str, pos: Tuple[int, int] = None, gradio = False) -> RenderUnit:
   token = Image.open(getTokenImagePath(json_path, gradio=gradio))
   renderUnit = RenderUnit(pos=pos, token=token, unitUID=None)
   return renderUnit
