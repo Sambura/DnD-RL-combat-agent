@@ -76,7 +76,7 @@ def train_loop_full(agent: DnDAgent,
 
         next_turn_ours = game.current_player_id == player_id
 
-        if next_turn_ours: # if the next move is ours again, memorize current transition
+        if next_turn_ours or game_over: # if the next move is ours again, memorize current transition
             reward = reward_fn(game, turn_info, None)
             memorize_fn(state, action_vector, reward, new_state, game_over)
             if do_learn: agent.random_learn()
@@ -204,6 +204,6 @@ def reward_full_v1(game, data_agent, data_enemy):
     if units_left == len(game.units):
         return 15
     elif units_left == 0:
-        return 0
+        return -15
     
     return len([x for x in units_removed if x[1] != player_id]) * 1
