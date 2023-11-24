@@ -148,3 +148,33 @@ def plot_training_history(iters,
 
     if show: plt.show()
     else: return (ax, ax2) if ax2 is not None else ax
+
+def plot_gen_history(winrates, gen_iters, eps=None, figsize=(11, 6), show=True):
+    plt.figure(figsize=figsize)
+    plt.title(f'Training (generation {len(gen_iters) + 1})')
+    plt.xlabel('Agent iteration')
+    plt.ylabel('Winrate')
+
+    ax: plt.Axes = plt.gca()
+    ax.plot(100 * np.array(winrates))
+    ax.scatter(range(len(winrates)), 100 * np.array(winrates), 75, lw=2, label='Winrate', marker='x', c='k')
+    ax.axhline(100 * winrates[-1], c='k', lw=1, linestyle='--')
+
+    artists, labels = ax.get_legend_handles_labels()
+    
+    ax2 = None
+    if eps is not None:
+        ax2 = plt.twinx()
+        ax2.plot(eps, color='red', label='Epsilon')
+
+        for x, y in zip((artists, labels), ax2.get_legend_handles_labels()): x += y
+
+    gen_lines = np.cumsum(gen_iters)
+
+    for line in gen_lines:
+        ax.axvline(line - 0.5, c='k', lw=2)
+
+    ax.legend(artists, labels, loc='upper left')
+
+    if show: plt.show()
+    else: return (ax, ax2) if ax2 is not None else ax

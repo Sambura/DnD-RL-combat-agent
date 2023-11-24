@@ -8,7 +8,10 @@ from typing import Optional
 def train_loop_trivial(agent: DnDAgent, 
                        game: DnDBoard,
                        reward_fn: callable,
-                       iter_limit: int=10000) -> int:
+                       iter_limit: int=10000,
+                       do_learn: bool=True,
+                       memorize_fn: callable=None,
+                       raise_on_limit: bool=True) -> int:
     """
     The simplest training loop for DnDAgent. As the new state, agent remembers the state of the \
     board right after it made a move. The reward is not transformed.
@@ -23,34 +26,39 @@ def train_loop_trivial(agent: DnDAgent,
     """
     if agent.sequential_actions:
         raise RuntimeWarning('Provided agent is incompatible with this train loop')
+    if memorize_fn is None: memorize_fn = agent.memorize
 
     for iter_count in range(iter_limit):
-        state, action_vector, new_coords, action = get_states(game, agent)
         unit, player_id = game.current_unit, game.current_player_id
         
+        state, action_vector, new_coords, action = get_states(game, agent)
         move_legal, updates1 = game.move(new_coords, raise_on_illegal=False)
         action_legal, updates2 = game.use_action(action, raise_on_illegal=False)
-        game.finish_turn()
         updates = merge_game_updates(updates1, updates2)
+        game.finish_turn()
         game_state = game.get_game_state(player_id)
+        game_over = game_state != GameState.PLAYING
         reward = reward_fn(game, game_state, unit, player_id, move_legal, action_legal, updates)
         new_state = game.observe_board(player_id)
-        game_over = game_state != GameState.PLAYING
 
-        agent.memorize(state, action_vector, reward, new_state, game_over)
-        agent.learn()
+        memorize_fn(state, action_vector, reward, new_state, game_over)
+        if do_learn: agent.random_learn()
 
         if game_over: return iter_count + 1
     
     raise RuntimeError('Iteration limit exceeded')
+    if raise_on_limit: raise RuntimeError('Iteration limit exceeded')
+    return iter_limit
 
 def train_loop_sequential_V1(agent: DnDAgent, 
                              game: DnDBoard,
                              reward_fn: callable,
                              iter_limit: int=10000,
-                             do_learn: bool=True) -> int:
+                             do_learn: bool=True,
+                             memorize_fn: callable=None) -> int:
     if not agent.sequential_actions:
         raise RuntimeWarning('Provided agent is incompatible with this train loop')
+    if memorize_fn is None: memorize_fn = agent.memorize
 
     for iter_count in range(iter_limit):
         unit, player_id = game.current_unit, game.current_player_id
@@ -78,8 +86,8 @@ def train_loop_sequential_V1(agent: DnDAgent,
             reward = reward_fn(game, game_state, unit, player_id, move_legal, action_legal, updates)
             new_state = game.observe_board(player_id)
             game_over = game_state != GameState.PLAYING
-            agent.memorize(state, action_vector, reward, new_state, game_over)
-            if do_learn: agent.learn()
+            memorize_fn(state, action_vector, reward, new_state, game_over)
+            if do_learn: agent.random_learn()
 
             if game_over: return iter_count + 1
 

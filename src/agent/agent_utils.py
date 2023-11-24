@@ -79,7 +79,7 @@ def get_legal_action_resolver(board_size, sequential_actions=False):
             [possible_positions[1][pos_index], possible_targets[1][target_index]]
         ]
     
-    PASS_CHANCE = 0.1
+    PASS_CHANCE = 0.02
     ACTION_CHANCE = 0.5
     def sequential_resolver(state: np.ndarray[np.float32]):
         remaining_speed = state[11, 0, 0]
