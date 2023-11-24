@@ -79,7 +79,7 @@ def get_legal_action_resolver(board_size, sequential_actions=False):
             [possible_positions[1][pos_index], possible_targets[1][target_index]]
         ]
     
-    PASS_CHANCE = 0.1
+    PASS_CHANCE = 0.02
     ACTION_CHANCE = 0.5
     def sequential_resolver(state: np.ndarray[np.float32]):
         remaining_speed = state[11, 0, 0]
@@ -112,45 +112,64 @@ def get_legal_action_resolver(board_size, sequential_actions=False):
 
     return sequential_resolver if sequential_actions else resolver
 
-def agent_take_turn_seq(game: DnDBoard, agent: DnDAgent, action_to_string: bool=False):
+def agent_take_turn(game: DnDBoard, agent: DnDAgent, state_indices: list[int]=None, get_turn_info: bool=False):
     actions = []
 
-    while game.current_movement_left > 0 or not game.used_action: # while unit is still able to do something
-        _, _, new_coords, action = get_states_seq(game, agent)
+    if agent.sequential_actions:
+        while game.current_movement_left > 0 or not game.used_action: # while unit is still able to do something
+            _, _, new_coords, action = get_states_seq(game, agent, state_indices=state_indices)
 
-        if new_coords is not None: # move to new_coords
-            unit_position = game.current_unit.pos
-            move_legal, updates = game.move(new_coords, raise_on_illegal=False)
-            finish_turn = not move_legal
+            if new_coords is not None: # move to new_coords
+                unit_position = game.current_unit.pos
+                move_legal, updates = game.move(new_coords, raise_on_illegal=False)
+                finish_turn = not move_legal
+                if get_turn_info: actions.append(('move', {'from': unit_position, 'to': new_coords}, move_legal))
+            elif action is not None: # invoke the action
+                action_legal, updates = game.use_action(action, raise_on_illegal=False)
+                finish_turn = not action_legal
+                if get_turn_info: actions.append(('action', {'action': action}, action_legal))
+            else:
+                finish_turn = True
+                if get_turn_info: actions.append(('pass', {}, True))
+
+            if finish_turn: break
+    else:
+        _, _, new_coords, action = get_states(game, agent, state_indices=state_indices)
+        unit_position = game.current_unit.pos
+        move_legal, _ = game.move(new_coords, raise_on_illegal=False)
+        action_legal, _ = game.use_action(action, raise_on_illegal=False)
+        if get_turn_info: 
             actions.append(('move', {'from': unit_position, 'to': new_coords}, move_legal))
-        elif action is not None: # invoke the action
-            action_legal, updates = game.use_action(action, raise_on_illegal=False)
-            finish_turn = not action_legal
-
-            actions.append(('action', {'action': str(action) if action_to_string else action}, action_legal))
-        else:
-            actions.append(('pass', {}, True))
-            finish_turn = True
-
-        if finish_turn: break
+            actions.append(('action', {'action': action}, action_legal))
     
     game.finish_turn()
     return actions
 
-def agents_play_loop(agent1: DnDAgent, 
-                     agent2: DnDAgent, 
+def agents_play_loop_bare(game: DnDBoard, agents: list[DnDAgent], state_indices: list[list[int]], iter_limit=1000) -> tuple[int, int]:
+    """Make agents play the game against each other. Returns iteration count and index of the winner"""
+    for iter_count in range(iter_limit):
+        player_id = game.current_player_id
+
+        agent_take_turn(game, agents[player_id], state_indices[player_id])
+        if game.get_game_state() != GameState.PLAYING:
+            winner = 0 if len(game.players_to_units[1]) == 0 else 1
+            return iter_count + 1, winner
+
+    return iter_limit, -1
+
+def agents_play_loop(agents: list[DnDAgent], 
                      game: DnDBoard, 
                      color_map: dict,
                      manual_input: bool=False, 
                      delay: float=0.5,
-                     reset_epsilon: bool=True) -> int:
+                     reset_epsilon: bool=True,
+                     state_indices: list[int]=None) -> int:
     game_over = False
     iter_count = 0
     if reset_epsilon:
-        epsilon1 = agent1.epsilon
-        agent1.epsilon = 0
-        epsilon2 = agent2.epsilon
-        agent2.epsilon = 0
+        epsilons = [agent.epsilon for agent in agents]
+        for agent in agents: agent.epsilon = 0
+    if state_indices is None: state_indices = [None] * len(agents)
 
     print_game(game, color_map)
     try:
@@ -170,22 +189,9 @@ def agents_play_loop(agent1: DnDAgent,
                 clear_output(wait=False)
                 print(f'Iteration: {iter_count}')
 
-                agent = agent1 if game.current_player_id == 0 else agent2
-                if agent.sequential_actions:
-                    turn_info = agent_take_turn_seq(game, agent)
-                    print_turn_info(turn_info)
-
-                else:
-                    _, _, new_coords, action = get_states(game, agent)
-                    old_coords = game.current_unit.pos
-                    move_legal, _ = game.move(new_coords, raise_on_illegal=False)
-                    action_legal, _ = game.use_action(action, raise_on_illegal=False)
-                    game.finish_turn()
-                    game_over = game.get_game_state() != GameState.PLAYING
-
-                    print_move(old_coords, new_coords, move_legal)
-                    print_action(action, action_legal)
-
+                turn_info = agent_take_turn(game, agents[game.current_player_id], state_indices[game.current_player_id], True)
+                print_turn_info(turn_info)
+                game_over = game.get_game_state() != GameState.PLAYING
                 print_game(game, color_map)
 
             except KeyboardInterrupt:
@@ -193,8 +199,7 @@ def agents_play_loop(agent1: DnDAgent,
                 return None
     finally:
         if reset_epsilon: 
-            agent1.epsilon = epsilon1
-            agent2.epsilon = epsilon2
+            for agent, eps in zip(agents, epsilons): agent.epsilon = eps
 
     winner = 0 if len(game.players_to_units[1]) == 0 else 1
     print(f'\nGame over in {iter_count} iterations. Winner: player #{winner + 1}')

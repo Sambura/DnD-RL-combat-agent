@@ -30,6 +30,10 @@ class RandomAgent():
         return self.random_action_resolver(state)
 
 class DnDAgent():
+    BASE_ATTRS = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 
+                  'out_channels', 'device', 'sequential_actions', 'random_action_resolver']
+    """Attributes that should not be stripped upon loading agent"""
+
     def __init__(self,
                  board_shape: tuple[int, int], 
                  in_channels: int, 
@@ -91,7 +95,7 @@ class DnDAgent():
             actions_shape = (memory_capacity, self.out_channels, 2) # 2 - [x, y] coordinates
         self.state_memory = np.zeros(state_shape, dtype=np.float32)
         self.new_state_memory = np.zeros(state_shape, dtype=np.float32)
-        self.actions_memory = np.zeros(actions_shape, dtype=np.float32)
+        self.actions_memory = np.zeros(actions_shape, dtype=np.int64)
         self.reward_memory = np.zeros(memory_capacity, dtype=np.float32)
         self.game_over_memory = np.zeros(memory_capacity, dtype=np.bool_)
         self.stripped = False
@@ -161,10 +165,8 @@ class DnDAgent():
                 agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
         
         if strip:
-            anames = ['model_class', 'eval_model', 'epsilon', 'board_shape', 'in_channels', 'out_channels', 'device', 'sequential_actions']
-
             for x in agent.__dict__.copy():
-                if x in anames: continue
+                if x in DnDAgent.BASE_ATTRS: continue
                 delattr(agent, x)
 
             agent.stripped = True
@@ -190,8 +192,21 @@ class DnDAgent():
         self.memory_position = 0
         self.memory_bound = 0
 
-    def learn(self):
+    def random_learn(self):
+        """Take a random batch of memories and learn"""
         if self.memory_bound < self.batch_size: return
+
+        batch_indices = np.random.choice(self.memory_bound, self.batch_size, replace=False)
+
+        states = torch.tensor(self.state_memory[batch_indices], dtype=torch.float32)
+        new_states = torch.tensor(self.new_state_memory[batch_indices], dtype=torch.float32)
+        rewards = torch.tensor(self.reward_memory[batch_indices], dtype=torch.float32)
+        game_not_overs = torch.tensor(self.game_over_memory[batch_indices], dtype=torch.bool)
+        actions = torch.tensor(self.actions_memory[batch_indices] , dtype=torch.int64)
+
+        self.learn(states, actions, rewards, new_states, game_not_overs)
+    
+    def learn(self, states, actions, rewards, new_states, game_not_overs):
         if self.dual_learning:
             self.replace_model_counter += 1
             if self.replace_model_counter >= self.replace_model_interval:
@@ -199,25 +214,22 @@ class DnDAgent():
                 self.next_model.load_state_dict(self.eval_model.state_dict())
                 if self.on_replace is not None: self.on_replace()
 
+        states = states.to(self.device)
+        actions = actions.to(self.device) # (batch_size, 2, 2)
+        rewards = rewards.to(self.device)
+        new_states = new_states.to(self.device)
+        game_not_overs = game_not_overs.to(self.device)
+
+        batch_size = len(game_not_overs)
         self.optimizer.zero_grad()
-
-        batch_indices = np.random.choice(self.memory_bound, self.batch_size, replace=False)
-
-        states = torch.tensor(self.state_memory[batch_indices], device=self.device)
-        new_states = torch.tensor(self.new_state_memory[batch_indices], device=self.device)
-        rewards = torch.tensor(self.reward_memory[batch_indices], device=self.device)
-        game_not_overs = torch.tensor(self.game_over_memory[batch_indices], device=self.device)
-        
-        actions = self.actions_memory[batch_indices] # (batch_size, 2, 2)
-
         q_evals = self.eval_model(states) # [B, out_channeles, H, W]
-        q_nexts = self.next_model(new_states).view(self.batch_size, self.out_channels, -1) # [B, out_channeles, H*W]
+        q_nexts = self.next_model(new_states).view(batch_size, self.out_channels, -1) # [B, out_channeles, H*W]
 
-        batch_index = np.arange(self.batch_size, dtype=np.int32)
+        batch_index = torch.tensor(np.arange(batch_size, dtype=np.int32), dtype=torch.long, device=self.device)
 
         q_target = torch.clone(q_evals)
         if self.sequential_actions: # actions: [B, 3]
-            q_nexts = q_nexts.view(self.batch_size, -1) # [B, out_channeles * H * W]
+            q_nexts = q_nexts.view(batch_size, -1) # [B, out_channeles * H * W]
             q_target[batch_index, actions[:, 0], actions[:, 1], actions[:, 2]] = rewards + self.gamma * torch.max(q_nexts, dim=1)[0] * game_not_overs
         else:
             for i in range(self.out_channels):
@@ -261,6 +273,7 @@ class DnDAgent():
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.on_replace = None
+        if not hasattr(self, 'sequential_actions'): self.sequential_actions = False
         self.random_action_resolver = get_default_random_action_resolver(self.board_shape, self.out_channels, self.sequential_actions)
         if not hasattr(self, 'model_class'): self.model_class = DnDEvalModel # delete this line asap
         self.eval_model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()
