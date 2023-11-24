@@ -279,7 +279,7 @@ class DnDBoard():
         state[2, self.current_unit.pos[0], self.current_unit.pos[1]] = 1 # current unit 
         state[3] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.speed) # speed
         state[4] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].range) # attack range
-        state[5] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].attack_damage) # attack damage
+        state[5] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.actions[0].average_damage) # attack damage
         state[6] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.health) # health
         state[7] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else (self.turn_order.index(self.units.index(z)) + 1) / len(self.units)) # turn order
         state[8] = transform_matrix(self.board, lambda x,y,z: 0 if z is None else z.AC) # armor

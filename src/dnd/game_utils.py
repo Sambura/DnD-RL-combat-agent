@@ -3,6 +3,7 @@ from itertools import zip_longest
 from typing import List, Tuple
 import glob
 import os
+from warnings import warn
 
 from ..utils.common import *
 from .game_board import DnDBoard
@@ -161,6 +162,7 @@ class fieldGenerator:
 
 
 def generate_balanced_game(board_size: Tuple[int, int], player_units, player_count=2):
+    warn ('generate_balanced_game is now performed through `fieldGenerator` class', DeprecationWarning, stacklevel=2)
     game = DnDBoard(board_size)
     for unit, count in player_units:
         for _ in range(count):
