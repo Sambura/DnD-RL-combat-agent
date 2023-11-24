@@ -1,6 +1,8 @@
 import numpy as np
 import random
 import torch
+import math
+from dice import roll_min, roll_max
 
 from typing import Union
 
@@ -46,3 +48,6 @@ def seed_everything(seed, deterministic_cudnn=False):
     torch.cuda.manual_seed_all(seed)
 
     torch.backends.cudnn.deterministic = deterministic_cudnn
+
+def roll_avg(string:str) -> int:
+  return math.ceil((roll_min(string) + roll_max(string))/2)
