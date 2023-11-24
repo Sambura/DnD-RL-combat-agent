@@ -89,7 +89,8 @@ def print_turn_info(turn_info):
         elif action == 'pass':
             print('Unit finishes turn')
 
-def place_unit_randomly(game: DnDBoard, unit: Unit, player_id: int):
+def place_unit_randomly_sparse(game: DnDBoard, unit: Unit, player_id: int):
+    """Randomly places a unit on the board. Works best for sparse boards"""
     while True:
         coords = get_random_coords(*game.board_shape)
         if game.is_occupied(coords): continue
@@ -119,17 +120,17 @@ def constrained_sum_sample_pos(n: int, total:int):
     return np.array([a - b for a, b in zip(dividers + [total], [0] + dividers)])
 
 class fieldGenerator:
-    def __init__(self, board_size: Tuple[int, int], player_count:int = 2) -> None:
+    def __init__(self, board_size: Tuple[int, int], player_count: int=2) -> None:
         self.game = DnDBoard(board_size)
         self.player_count = player_count
         self.units:List[Tuple[Unit, RenderUnit]] = []
         self.renderUnits:List[RenderUnit] = []
 
-    def load_from_folder(self, json_path:str):
+    def load_from_folder(self, json_path: str, verbose=False):
         json_folder = os.path.abspath(json_path)
-        print(json_folder)
+        if verbose: print(json_folder)
         paths = glob.glob(json_folder + '/*.json')
-        print(paths)
+        if verbose: print(paths)
         for file_path in paths:
             self.loadJSON(file_path)
         return self
@@ -156,7 +157,7 @@ class fieldGenerator:
                 unit = random.choice(viableUnits)
                 # print(groupCR/unit[0].CR)
                 for _ in range(int(groupCR/unit[0].CR)):
-                    pos = place_unit_randomly(self.game, deepcopy(unit[0]), player_id)
+                    pos = place_unit_randomly_sparse(self.game, deepcopy(unit[0]), player_id)
                     self.renderUnits.append(deepcopy(unit[1]))
                     self.renderUnits[-1].pos = pos
         self.game.initialize_game()
@@ -176,7 +177,7 @@ def generate_balanced_game(board_size: Tuple[int, int], player_units, player_cou
     for unit, count in player_units:
         for _ in range(count):
             for player_id in range(player_count):
-                place_unit_randomly(game, deepcopy(unit), player_id)
+                place_unit_randomly_sparse(game, deepcopy(unit), player_id)
     
     game.initialize_game()
     return game
