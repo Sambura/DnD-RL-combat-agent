@@ -46,7 +46,54 @@ def train_loop_trivial(agent: DnDAgent,
 
         if game_over: return iter_count + 1
     
-    raise RuntimeError('Iteration limit exceeded')
+    if raise_on_limit: raise RuntimeError('Iteration limit exceeded')
+    return iter_limit
+
+def train_loop_full(agent: DnDAgent,
+                    game: DnDBoard, 
+                    reward_fn: callable,
+                    iter_limit: int=10000,
+                    do_learn: bool=True,
+                    memorize_fn: callable=None,
+                    raise_on_limit: bool=True) -> int:
+    if agent.sequential_actions:
+        raise RuntimeWarning('Provided agent is incompatible with this train loop')
+    if memorize_fn is None: memorize_fn = agent.memorize
+    last_state, last_action, last_turn_info = None, None, None
+    
+    for iter_count in range(iter_limit):
+        unit, player_id = game.current_unit, game.current_player_id
+
+        state, action_vector, new_coords, action = get_states(game, agent)
+        move_legal, updates1 = game.move(new_coords, raise_on_illegal=False)
+        action_legal, updates2 = game.use_action(action, raise_on_illegal=False)
+        updates = merge_game_updates(updates1, updates2)
+        game.finish_turn()
+        game_state = game.get_game_state(player_id)
+        game_over = game_state != GameState.PLAYING
+        turn_info = (game_state, unit, player_id, move_legal, action_legal, updates)
+        new_state = game.observe_board()
+
+        next_turn_ours = game.current_player_id == player_id
+
+        if next_turn_ours: # if the next move is ours again, memorize current transition
+            reward = reward_fn(game, turn_info, None)
+            memorize_fn(state, action_vector, reward, new_state, game_over)
+            if do_learn: agent.random_learn()
+
+        if not next_turn_ours or game_over:
+            if last_state is not None:
+                reward = reward_fn(game, last_turn_info, turn_info)
+                memorize_fn(last_state, last_action, reward, new_state, game_over)
+                if do_learn: agent.random_learn()
+
+            last_state = state
+            last_action = action_vector
+            last_turn_info = turn_info
+        
+        if game_over:
+            return iter_count + 1
+
     if raise_on_limit: raise RuntimeError('Iteration limit exceeded')
     return iter_limit
 
@@ -147,3 +194,16 @@ def calculate_reward_classic_seq(game, game_state, unit: Unit, player_id: int, m
     
     # agent passed
     return reward
+
+def reward_full_v1(game, data_agent, data_enemy):
+    game_state, unit, player_id, move_legal, action_legal, updates = data_agent
+
+    units_removed = updates['units_removed']
+
+    units_left = len(game.players_to_units[player_id])
+    if units_left == len(game.units):
+        return 15
+    elif units_left == 0:
+        return 0
+    
+    return len([x for x in units_removed if x[1] != player_id]) * 1
