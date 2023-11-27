@@ -116,7 +116,7 @@ def train_loop_sequential_V1(agent: DnDAgent,
         # or use action. Additionally, we terminate current turn as soon as agent
         # tries to make an illegal move. Moving into the same board cell is also
         # considered illegal for these purposes
-        while game.current_movement_left > 0 or not game.used_action: # while unit is still able to do something
+        while game.current_unit.is_alive() and (game.current_movement_left > 0 or not game.used_action):
             state, action_vector, new_coords, action = get_states_seq(game, agent)
             action_legal, move_legal = None, None
 

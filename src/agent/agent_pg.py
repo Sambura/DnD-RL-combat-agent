@@ -1,4 +1,5 @@
 from .deep_q_network import DnDEvalModel
+from .agent import passthrough_filter
 from torch import nn
 import numpy as np
 import random
@@ -6,9 +7,6 @@ from typing import Optional
 import pickle
 import torch
 import os
-
-def passthrough_filter(state, probs):
-    return probs
 
 class DnDAgentPolicyGradient():
     BASE_ATTRS = ['model_class', 'model', 'board_shape', 'in_channels', 
@@ -73,7 +71,7 @@ class DnDAgentPolicyGradient():
     def predict_probabilities(self, state, filter=True):
         with torch.no_grad():
             output = self.model(torch.tensor(state).to(self.device).unsqueeze(0))[0]
-            activated = torch.nn.functional.softmax(torch.flatten(output), dim=0)
+            activated = torch.nn.functional.softmax(torch.flatten(output) - torch.max(output)[0], dim=0)
 
         probabilities = activated.detach().cpu().numpy().reshape(self.out_channels, *self.board_shape)
         if filter: probabilities = self.legal_moves_filter(state, probabilities)

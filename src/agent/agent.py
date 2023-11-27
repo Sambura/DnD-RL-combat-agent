@@ -8,6 +8,12 @@ import pickle
 import torch
 import os
 
+def passthrough_filter(state, probs):
+    return probs
+
+def passthrough_masker(state, ch_count, board_size):
+    return np.ones((ch_count, *board_size))
+
 def get_default_random_action_resolver(board_shape, out_channels, sequential_actions):
     h, w = board_shape
 
