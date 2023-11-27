@@ -1,7 +1,9 @@
-from ..utils.common import manhattan_distance, roll_avg
-from dice import roll
-# from .game_board import DnDBoard
-# from .units import Unit
+from ..utils.common import manhattan_distance
+from dice import parse_expression
+from dice.utilities import single
+from dice.constants import DiceExtreme
+# from .game_board import DnDBoard # Causes circular import
+# from .units import Unit # Causes circular import
 
 class Action:
     """
@@ -19,11 +21,24 @@ class Attack(Action):
         super().__init__(name)
         self.hit = hit
         self.attack_damage = attack_damage
-        self.average_damage = roll_avg(str(attack_damage))
         self.range = range
         
-    def invoke(self, game, source_unit, target_unit):
-        target_unit.take_damage(roll(str(self.attack_damage))) #TODO include AC in damage calculation
+        self.parsed_hit =  parse_expression('d20+'+str(hit))
+        self.parsed_damage = parse_expression(str(attack_damage))
+        self.average_damage = (single([element.evaluate(force_extreme=DiceExtreme.EXTREME_MAX) for element in self.parsed_damage])+
+                               single([element.evaluate(force_extreme=DiceExtreme.EXTREME_MIN) for element in self.parsed_damage]))/2
+        
+    def invoke(self, game, source_unit, target_unit, roll:bool = False):
+        if roll:
+            attack_roll = single([element.evaluate() for element in self.parsed_hit]) 
+            damage = 0
+            if attack_roll >= target_unit.AC: # hits if attack roll >= target AC
+                damage = single([element.evaluate() for element in self.parsed_damage])
+                target_unit.take_damage(damage) 
+            return (attack_roll, damage)
+        else:
+            hit_chance = (target_unit.AC - self.hit + 1) / 20
+            target_unit.take_damage(hit_chance * self.average_damage)
 
     def check_action_legal(self, game, source_unit, target_unit):
         return (target_unit is not None) and (manhattan_distance(source_unit.pos, target_unit.pos) <= self.range)
