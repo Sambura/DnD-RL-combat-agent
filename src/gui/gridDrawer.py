@@ -27,8 +27,13 @@ def draw_field(renderUnits: List[RenderUnit], selectedToken, gridScale = None, g
   return field
 
 def highlight_selected_token(renderUnits: List[RenderUnit], field: Image, gridScale, selection):
-  token_position = renderUnits[selection].getPos()[::-1]
   draw = ImageDraw.Draw(field)
-  position = np.array([1 + token_position*(gridScale + 1), 1 + (token_position+1)*(gridScale + 1)]).ravel()
-  draw.rounded_rectangle(position, radius=gridScale/10, outline=(255, 0, 0), width=3)
+  for renderUnit in renderUnits:
+    token_position = renderUnit.getPos()[::-1]
+    token_team_color = renderUnit.getTeamColor()
+    position = np.array([1 + token_position*(gridScale + 1), 1 + (token_position+1)*(gridScale + 1)]).ravel()
+    if renderUnit == renderUnits[selection]:
+      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=3)
+    else:
+      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=2)       
   return field
