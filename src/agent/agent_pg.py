@@ -71,7 +71,7 @@ class DnDAgentPolicyGradient():
     def predict_probabilities(self, state, filter=True):
         with torch.no_grad():
             output = self.model(torch.tensor(state).to(self.device).unsqueeze(0))[0]
-            activated = torch.nn.functional.softmax(torch.flatten(output) - torch.max(output)[0], dim=0)
+            activated = torch.nn.functional.softmax(torch.flatten(output) - torch.max(output), dim=0)
 
         probabilities = activated.detach().cpu().numpy().reshape(self.out_channels, *self.board_shape)
         if filter: probabilities = self.legal_moves_filter(state, probabilities)
