@@ -103,6 +103,45 @@ class DnDEvalModelRT5(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
+    
+class DnDEvalModelRT19(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            *[ResidualBlock(256) for _ in range(19)],
+            nn.Conv2d(256, 16, kernel_size=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Conv2d(16, out_channels, kernel_size=15, padding=7)
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+    
+class DnDEvalModelRT5_FC(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, input_size=(5, 5)):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            ResidualBlock(256),
+            ResidualBlock(256),
+            ResidualBlock(256),
+            ResidualBlock(256),
+            ResidualBlock(256),
+            nn.Conv2d(256, 16, kernel_size=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(input_size[0] * input_size[1] * 16, input_size[0] * input_size[1] * (out_channels - 1) + 1)
+        )
+
+    def forward(self, x):
+        return self.layers(x)
 
 class DnDEvalModelRT5_UB(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):

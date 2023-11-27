@@ -7,9 +7,12 @@ import pickle
 import torch
 import os
 
+def passthrough_filter(state, probs):
+    return probs
+
 class DnDAgentPolicyGradient():
     BASE_ATTRS = ['model_class', 'model', 'board_shape', 'in_channels', 
-                  'out_channels', 'device', 'sequential_actions']
+                  'out_channels', 'device', 'sequential_actions', 'action_space']
     """Attributes that should not be stripped upon loading agent"""
 
     def __init__(self,
@@ -21,7 +24,8 @@ class DnDAgentPolicyGradient():
                  memory_capacity: int=10000,
                  batch_size: int=64,
                  model_class: type[nn.Module]=DnDEvalModel,
-                 sequential_actions: bool=False) -> None:
+                 sequential_actions: bool=False,
+                 legal_moves_filter: callable=None) -> None:
         """"""
         self.in_channels = in_channels
         self.out_channels = out_actions
@@ -32,16 +36,14 @@ class DnDAgentPolicyGradient():
         self.replace_model_counter = 0
         self.model_class = model_class
         self.sequential_actions = sequential_actions
+        self.legal_moves_filter = passthrough_filter if legal_moves_filter is None else legal_moves_filter
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = model_class(self.in_channels, self.out_channels).train().to(self.device)
         self.loss_fn = nn.CrossEntropyLoss(reduction='none')
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
-        self.action_space = np.zeros((self.out_channels, *self.board_shape), dtype=np.int64)
-        for i in range(self.action_space.size):
-            self.action_space[np.unravel_index(i, self.action_space.shape)] = i
-        self.action_space = self.action_space.flatten()
+        self.init_action_space()
         
         self.discounts = self.gamma ** np.arange(self.memory_capacity, dtype=np.int64)
         self.memory_position = 0
@@ -55,6 +57,12 @@ class DnDAgentPolicyGradient():
         self.reward_memory = np.zeros(memory_capacity, dtype=np.float32)
         self.stripped = False
 
+    def init_action_space(self):
+        self.action_space = np.zeros((self.out_channels, *self.board_shape), dtype=np.int64)
+        for i in range(self.action_space.size):
+            self.action_space[np.unravel_index(i, self.action_space.shape)] = i
+        self.action_space = self.action_space.flatten()
+
     def predict(self, state):
         with torch.no_grad(): # this just makes prediction a bit faster (I checked)
             return self.model(torch.tensor(state).to(self.device).unsqueeze(0)).detach().cpu().numpy()[0]
@@ -62,12 +70,20 @@ class DnDAgentPolicyGradient():
     def choose_action_vector(self, state):
         raise NotImplementedError()
     
-    def choose_single_action(self, state):
+    def predict_probabilities(self, state, filter=True):
         with torch.no_grad():
             output = self.model(torch.tensor(state).to(self.device).unsqueeze(0))[0]
             activated = torch.nn.functional.softmax(torch.flatten(output), dim=0)
-        index = np.random.choice(self.action_space, p=activated.detach().cpu().numpy())
-        return np.unravel_index(index, output.shape)
+
+        probabilities = activated.detach().cpu().numpy().reshape(self.out_channels, *self.board_shape)
+        if filter: probabilities = self.legal_moves_filter(state, probabilities)
+        return probabilities / np.sum(probabilities)
+
+    def choose_single_action(self, state):
+        probabilities = self.predict_probabilities(state).reshape(-1)
+
+        index = np.random.choice(self.action_space, p=probabilities)
+        return np.unravel_index(index, (self.out_channels, *self.board_shape))
 
     def save_agent(self, path: str) -> None:
         if not os.path.exists(path):
@@ -93,6 +109,8 @@ class DnDAgentPolicyGradient():
 
         with open(agent_path, 'rb') as file:
             agent = pickle.load(file)
+
+        agent.init_action_space()
 
         if 'model_class' in kwargs: # delete these 5 lines asap
             agent.model_class = kwargs['model_class']
@@ -136,7 +154,7 @@ class DnDAgentPolicyGradient():
         return Gs
 
     def learn(self):
-        # self.optimizer.zero_grad()
+        self.optimizer.zero_grad()
 
         ep_len = self.memory_position
         states = torch.tensor(self.state_memory[:ep_len], dtype=torch.float32, device=self.device)
@@ -147,23 +165,26 @@ class DnDAgentPolicyGradient():
         for t in range(ep_len):
             Gs[t] = np.sum(rewards[t:] * self.discounts[:ep_len - t])
 
-        Gs = torch.tensor(Gs, dtype=torch.float32, device=self.device)
-
         # mean = np.mean(Gs)
         # std = np.std(Gs)
         # Gs = (Gs - mean) / (std if std > 0 else 1)
+        Gs = torch.tensor(Gs, dtype=torch.float32, device=self.device)
+
         # print(Gs)
 
-        #predictions = self.model(states).view(ep_len, -1)
-        #losses = self.loss_fn(predictions, actions) * torch.tensor(Gs, device=self.device)
+        predictions = self.model(states).view(ep_len, -1)
+        losses = self.loss_fn(predictions, actions) * Gs
+        loss = torch.mean(losses)
+        loss.backward()
+        self.optimizer.step()
 
-        for i in range(0, ep_len, self.batch_size):
-            self.optimizer.zero_grad()
-
-            predictions = self.model(states[i : i + self.batch_size]).view(-1, len(self.action_space))
-            loss = torch.mean(self.loss_fn(predictions, actions[i : i + self.batch_size]) * Gs[i : i + self.batch_size])
-            loss.backward()
-            self.optimizer.step()
+        #for i in range(0, ep_len, self.batch_size):
+        #    self.optimizer.zero_grad()
+#
+        #    predictions = self.model(states[i : i + self.batch_size]).view(-1, len(self.action_space))
+        #    loss = torch.mean(self.loss_fn(predictions, actions[i : i + self.batch_size]) * Gs[i : i + self.batch_size])
+        #    loss.backward()
+        #    self.optimizer.step()
 
         self.memory_position = 0
 
@@ -173,7 +194,7 @@ class DnDAgentPolicyGradient():
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        for x in ['model', 'optimizer']:
+        for x in ['model', 'optimizer', 'legal_moves_filter']:
             state.pop(x)
 
         return state
