@@ -97,6 +97,17 @@ def place_unit_randomly_sparse(game: DnDBoard, unit: Unit, player_id: int):
 
         game._place_unit(unit, coords, player_id)
         return coords
+    
+def place_unit_randomly_dense(game: DnDBoard, unit: Unit, player_id: int):
+    """
+    Randomly places a unit on the board. Works best for dense boards. \
+    In practice works faster than sparse version when at least 80% of the cells are occupied
+    """
+    ys, xs = np.where(game.board == None)
+    index = random.randrange(len(xs))
+    coords = (ys[index], xs[index])
+    game._place_unit(unit, coords, player_id)
+    return coords
 
 def get_legal_moves(game: DnDBoard):
     current_unit = game.current_unit

@@ -102,7 +102,8 @@ def train_loop_sequential_V1(agent: DnDAgent,
                              reward_fn: callable,
                              iter_limit: int=10000,
                              do_learn: bool=True,
-                             memorize_fn: callable=None) -> int:
+                             memorize_fn: callable=None,
+                             raise_on_limit: bool=False) -> int:
     if not agent.sequential_actions:
         raise RuntimeWarning('Provided agent is incompatible with this train loop')
     if memorize_fn is None: memorize_fn = agent.memorize
@@ -142,7 +143,8 @@ def train_loop_sequential_V1(agent: DnDAgent,
 
         game.finish_turn()
     
-    raise RuntimeError('Iteration limit exceeded')
+    if raise_on_limit: raise RuntimeError('Iteration limit exceeded')
+    return iter_limit
 
 def calculate_reward_classic(game, game_state, unit: Unit, player_id: int, move_legal: bool, action_legal: bool, updates: dict):
     units_removed = updates['units_removed']
