@@ -188,7 +188,7 @@ class FieldGenerator:
 
 
 def generate_balanced_game(board_size: Tuple[int, int], player_units, player_count=2):
-    warn ('generate_balanced_game is now performed through `fieldGenerator` class', DeprecationWarning, stacklevel=2)
+    warn ('generate_balanced_game is now performed through `FieldGenerator` class', DeprecationWarning, stacklevel=2)
     game = DnDBoard(board_size)
     for unit, count in player_units:
         for _ in range(count):
