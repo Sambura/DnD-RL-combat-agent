@@ -19,6 +19,52 @@ def get_default_random_action_resolver(board_shape, out_channels, sequential_act
     
     return sequential_resolver if sequential_actions else resolver
 
+class Agent:
+    def load_agent(path: str, strip: bool=False, **kwargs):
+        """
+        Loads the agent from the specified directory
+
+        Parameters:
+        path (str): the directory containing agent's save files
+        strip (bool): if True, sets the agent to evaluation mode, deleting most of its attributes \
+            to take less memory. Note that it is not possible to train a stripped agent.
+        **kwargs: list of agent's attributes whose value should be modified. i.e. `epsilon = 0`
+        """
+        agent_path = os.path.join(path, 'agent.pkl')
+
+        with open(agent_path, 'rb') as file:
+            agent = pickle.load(file)
+
+        if 'model_class' in kwargs: # delete these 5 lines asap
+            agent.model_class = kwargs['model_class']
+            agent.eval_model = agent.model_class(agent.in_channels, agent.out_channels).to(agent.device).train()
+            if not strip:
+                if agent.dual_learning:
+                    agent.next_model = agent.model_class(agent.in_channels, agent.out_channels).to(agent.device).eval()
+                else:
+                    agent.next_model = agent.eval_model
+                agent.optimizer = torch.optim.Adam(agent.eval_model.parameters())
+        
+        agent.eval_model.load_state_dict(torch.load(os.path.join(path, f'eval_model.pt')))
+        if not strip:
+            agent.optimizer.load_state_dict(torch.load(os.path.join(path, f'optimizer.pt')))
+            if agent.dual_learning:
+                agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
+        
+        if strip:
+            for x in agent.__dict__.copy():
+                if x in DnDAgent.BASE_ATTRS: continue
+                delattr(agent, x)
+
+            agent.stripped = True
+            agent.eval_model.eval()
+
+        for name, value in kwargs.items():
+            assert hasattr(agent, name), f'attribute {name} does not exist'
+            setattr(agent, name, value)
+
+        return agent
+
 class RandomAgent():
     def __init__(self, board_shape, out_actions: int=2, action_resolver=None):
         self.board_shape = board_shape
@@ -51,7 +97,8 @@ class DnDAgent():
                  loss_fn: Optional[nn.Module]=None,
                  random_action_resolver=None,
                  model_class: type[nn.Module]=DnDEvalModel,
-                 sequential_actions: bool=False) -> None:
+                 sequential_actions: bool=False,
+                 legal_moves_masker: callable=None) -> None:
         """"""
         self.in_channels = in_channels
         self.out_channels = out_actions
@@ -68,6 +115,8 @@ class DnDAgent():
         self.on_replace = None
         self.model_class = model_class
         self.sequential_actions = sequential_actions
+        self.legal_moves_masker = passthrough_masker if legal_moves_masker is None else legal_moves_masker
+        self.masked_value = -15
         self.random_action_resolver = get_default_random_action_resolver(board_shape, out_actions, sequential_actions)
         if random_action_resolver is not None: self.random_action_resolver = random_action_resolver
         
@@ -111,14 +160,24 @@ class DnDAgent():
         if random.random() < self.epsilon:
             return self.random_action_resolver(state)
 
+        mask = self.legal_moves_masker(state, self.out_channels, self.board_shape)
         output = self.predict(state)
+        output = self.apply_mask(output, mask)
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1), axis=1), output.shape[1:])
     
+    def apply_mask(self, outputs, mask):
+        outputs *= mask
+        outputs += (1 - mask) * self.masked_value
+        return outputs
+
     def choose_single_action(self, state):
         if random.random() < self.epsilon:
             return self.random_action_resolver(state)
 
         output = self.predict(state)
+        mask = self.legal_moves_masker(state, self.out_channels, self.board_shape)
+        output = self.apply_mask(output, mask)
+
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1)), output.shape)
 
     def save_agent(self, path: str) -> None:
@@ -217,13 +276,20 @@ class DnDAgent():
         states = states.to(self.device)
         actions = actions.to(self.device) # (batch_size, 2, 2)
         rewards = rewards.to(self.device)
+        new_states_cpu = new_states
         new_states = new_states.to(self.device)
         game_not_overs = game_not_overs.to(self.device)
 
         batch_size = len(game_not_overs)
         self.optimizer.zero_grad()
         q_evals = self.eval_model(states) # [B, out_channeles, H, W]
-        q_nexts = self.next_model(new_states).view(batch_size, self.out_channels, -1) # [B, out_channeles, H*W]
+        q_nexts = self.next_model(new_states) # [B, out_channeles, H*W]
+
+        masks = np.array([self.legal_moves_masker(s, self.out_channels, self.board_shape) for s in new_states_cpu.detach().numpy()], dtype=bool)
+        masks = ~torch.tensor(masks, dtype=torch.bool, device=self.device) # [B, 3, 8, 8]
+        q_nexts += masks * self.masked_value
+            
+        q_nexts = q_nexts.view(batch_size, self.out_channels, -1)
 
         batch_index = torch.tensor(np.arange(batch_size, dtype=np.int32), dtype=torch.long, device=self.device)
 
@@ -279,6 +345,7 @@ class DnDAgent():
         self.eval_model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()
         self.next_model = self.model_class(self.in_channels, self.out_channels).to(self.device).eval()
         self.optimizer = torch.optim.Adam(self.eval_model.parameters())
+        self.legal_moves_masker = passthrough_masker
 
 class IdleDnDAgent():
     def choose_action_vector(self, state):

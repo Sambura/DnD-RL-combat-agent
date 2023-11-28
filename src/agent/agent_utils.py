@@ -116,7 +116,7 @@ def agent_take_turn(game: DnDBoard, agent: DnDAgent, state_indices: list[int]=No
     actions = []
 
     if agent.sequential_actions:
-        while game.current_movement_left > 0 or not game.used_action: # while unit is still able to do something
+        while game.current_unit.is_alive() and game.current_movement_left > 0 or not game.used_action: # while unit is still able to do something
             _, _, new_coords, action = get_states_seq(game, agent, state_indices=state_indices)
 
             if new_coords is not None: # move to new_coords

@@ -4,6 +4,9 @@ from .agent import DnDAgent
 from .agent_utils import get_states, get_states_seq
 from ..dnd.units import Unit
 from typing import Optional
+import numpy as np
+from ..utils.common import to_tuple
+import random
 
 def train_loop_trivial(agent: DnDAgent, 
                        game: DnDBoard,
@@ -30,10 +33,20 @@ def train_loop_trivial(agent: DnDAgent,
 
     for iter_count in range(iter_limit):
         unit, player_id = game.current_unit, game.current_player_id
-        
-        state, action_vector, new_coords, action = get_states(game, agent)
+
+        state = game.observe_board()
+
+        output = np.random.rand(agent.out_channels, *agent.board_shape) if random.random() < agent.epsilon else agent.predict(state)
+        move_mask = agent.legal_moves_masker(state, agent.out_channels, agent.board_shape)
+        new_coords = to_tuple(np.unravel_index(np.argmax((output[0] + (1 - move_mask[0]) * agent.masked_value).reshape(-1)), agent.board_shape))
         move_legal, updates1 = game.move(new_coords, raise_on_illegal=False)
+        action_mask = agent.legal_moves_masker(game.observe_board(), agent.out_channels, agent.board_shape)
+        target_coords = to_tuple(np.unravel_index(np.argmax((output[1] + (1 - action_mask[1]) * agent.masked_value).reshape(-1)), agent.board_shape))
+        target_unit = game.board[target_coords]
+        action = game.current_unit.actions[0].instantiate(game.current_unit, target_unit)
         action_legal, updates2 = game.use_action(action, raise_on_illegal=False)
+        action_vector = [[new_coords[0], target_coords[0]], [new_coords[1], target_coords[1]]]
+
         updates = merge_game_updates(updates1, updates2)
         game.finish_turn()
         game_state = game.get_game_state(player_id)

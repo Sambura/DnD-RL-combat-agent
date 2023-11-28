@@ -1,4 +1,5 @@
 from .deep_q_network import DnDEvalModel
+from .agent import passthrough_filter, passthrough_masker
 from torch import nn
 import numpy as np
 import random
@@ -17,11 +18,14 @@ class DnDAgentPolicyGradient():
                  in_channels: int, 
                  out_actions: int, 
                  lr: float=0.001,
+                 momentum: float=0,
+                 weight_decay: float=0,
                  gamma: float=0.9, 
                  memory_capacity: int=10000,
                  batch_size: int=64,
                  model_class: type[nn.Module]=DnDEvalModel,
-                 sequential_actions: bool=False) -> None:
+                 sequential_actions: bool=False,
+                 legal_moves_masker: callable=None) -> None:
         """"""
         self.in_channels = in_channels
         self.out_channels = out_actions
@@ -32,11 +36,12 @@ class DnDAgentPolicyGradient():
         self.replace_model_counter = 0
         self.model_class = model_class
         self.sequential_actions = sequential_actions
+        self.legal_moves_masker = passthrough_masker if legal_moves_masker is None else legal_moves_masker
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = model_class(self.in_channels, self.out_channels).train().to(self.device)
         self.loss_fn = nn.CrossEntropyLoss(reduction='none')
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum)
 
         self.action_space = np.zeros((self.out_channels, *self.board_shape), dtype=np.int64)
         for i in range(self.action_space.size):
@@ -45,6 +50,7 @@ class DnDAgentPolicyGradient():
         
         self.discounts = self.gamma ** np.arange(self.memory_capacity, dtype=np.int64)
         self.memory_position = 0
+        self.memory_bound = 0
         state_shape = (memory_capacity, self.in_channels, *board_shape)
         if sequential_actions:
             actions_shape = memory_capacity # action plane + 2 : [x, y] coordinates
@@ -53,6 +59,7 @@ class DnDAgentPolicyGradient():
         self.state_memory = np.zeros(state_shape, dtype=np.float32)
         self.actions_memory = np.zeros(actions_shape, dtype=np.int64)
         self.reward_memory = np.zeros(memory_capacity, dtype=np.float32)
+        self.future_reward_memory = np.zeros(memory_capacity, dtype=np.float32)
         self.stripped = False
 
     def predict(self, state):
@@ -64,10 +71,32 @@ class DnDAgentPolicyGradient():
     
     def choose_single_action(self, state):
         with torch.no_grad():
-            output = self.model(torch.tensor(state).to(self.device).unsqueeze(0))[0]
-            activated = torch.nn.functional.softmax(torch.flatten(output), dim=0)
-        index = np.random.choice(self.action_space, p=activated.detach().cpu().numpy())
-        return np.unravel_index(index, output.shape)
+            output = torch.flatten(self.model(torch.tensor(state).to(self.device).unsqueeze(0))[0])
+
+            if filter: 
+                self.last_mask = self.legal_moves_masker(state, self.out_channels)
+                output -= ~torch.tensor(self.last_mask, dtype=torch.bool, device=self.device).view(-1) * 1e30
+
+            activated = torch.nn.functional.softmax(output, dim=0)
+
+        probabilities = activated.detach().cpu().numpy().reshape(self.out_channels, *self.board_shape)
+        probabilities *= self.last_mask
+        
+        sum = np.sum(probabilities)
+        #if sum > 0:
+        return probabilities / sum
+        # else:
+        #     print('+')
+        #     probabilities = output.detach().cpu().numpy().reshape(self.out_channels, *self.board_shape)
+        #     if filter: probabilities = self.legal_moves_filter(state, probabilities)
+        #     probabilities -= np.min(probabilities)
+        #     return probabilities / np.sum(probabilities)
+
+    def choose_single_action(self, state):
+        probabilities = self.predict_probabilities(state).reshape(-1)
+
+        index = np.random.choice(self.action_space, p=probabilities)
+        return np.unravel_index(index, (self.out_channels, *self.board_shape))
 
     def save_agent(self, path: str) -> None:
         if not os.path.exists(path):
@@ -118,6 +147,38 @@ class DnDAgentPolicyGradient():
 
         return agent
 
+    def memorize_episode(self, states, actions, rewards):
+        ep_len = len(rewards)
+        states = np.array(states)
+        actions = np.ravel_multi_index(list(zip(*actions)), (self.out_channels, *self.board_shape))
+        rewards = np.array(rewards)
+
+        Gs = np.zeros_like(rewards, dtype=np.float32)
+        for t in range(ep_len):
+            Gs[t] = np.sum(rewards[t:] * self.discounts[:ep_len - t])
+
+        memory_end = self.memory_position + ep_len
+        if memory_end > self.memory_capacity:
+            memory_left = self.memory_capacity - self.memory_position
+            self.state_memory[self.memory_position:self.memory_capacity] = states[:memory_left]
+            self.actions_memory[self.memory_position:self.memory_capacity] = actions[:memory_left]
+            self.future_reward_memory[self.memory_position:self.memory_capacity] = Gs[:memory_left]
+            self.reward_memory[self.memory_position:self.memory_capacity] = rewards[:memory_left]
+            excess = ep_len - memory_left
+            self.state_memory[:excess] = states[memory_left:]
+            self.actions_memory[:excess] = actions[memory_left:]
+            self.future_reward_memory[:excess] = Gs[memory_left:]
+            self.reward_memory[:excess] = rewards[memory_left:]
+            self.memory_position = excess
+            self.memory_bound = self.memory_capacity
+        else:
+            self.state_memory[self.memory_position:memory_end] = states
+            self.actions_memory[self.memory_position:memory_end] = actions
+            self.future_reward_memory[self.memory_position:memory_end] = Gs
+            self.reward_memory[self.memory_position:memory_end] = rewards
+            self.memory_position += ep_len
+            self.memory_bound = max(self.memory_position, self.memory_bound)
+
     def memorize(self, state, actions, reward):
         self.state_memory[self.memory_position] = state
         self.reward_memory[self.memory_position] = reward
@@ -135,37 +196,33 @@ class DnDAgentPolicyGradient():
 
         return Gs
 
-    def learn(self):
-        # self.optimizer.zero_grad()
+    def random_learn(self):
+        if self.memory_bound < self.batch_size: return
 
-        ep_len = self.memory_position
-        states = torch.tensor(self.state_memory[:ep_len], dtype=torch.float32, device=self.device)
-        actions = torch.tensor(self.actions_memory[:ep_len], dtype=torch.int64, device=self.device)
-        rewards = self.reward_memory[:ep_len]
+        batch_indices = np.random.choice(self.memory_bound, self.batch_size, replace=False)
 
-        Gs = np.zeros_like(rewards)
-        for t in range(ep_len):
-            Gs[t] = np.sum(rewards[t:] * self.discounts[:ep_len - t])
+        states = torch.tensor(self.state_memory[batch_indices], dtype=torch.float32)
+        actions = torch.tensor(self.actions_memory[batch_indices] , dtype=torch.int64)
+        frewards = torch.tensor(self.future_reward_memory[batch_indices], dtype=torch.float32)
 
-        Gs = torch.tensor(Gs, dtype=torch.float32, device=self.device)
+        self.learn(states, actions, frewards)
 
-        # mean = np.mean(Gs)
-        # std = np.std(Gs)
-        # Gs = (Gs - mean) / (std if std > 0 else 1)
-        # print(Gs)
+    def learn(self, states, actions, frewards):
+        self.optimizer.zero_grad()
 
-        #predictions = self.model(states).view(ep_len, -1)
-        #losses = self.loss_fn(predictions, actions) * torch.tensor(Gs, device=self.device)
+        states = states.to(self.device)
+        actions = actions.to(self.device)
+        frewards = frewards.to(self.device)
 
-        for i in range(0, ep_len, self.batch_size):
-            self.optimizer.zero_grad()
+        # std, mean = torch.std_mean(frewards)
+        # frewards = (frewards - mean) / (std if std.item() > 0 else 1)
 
-            predictions = self.model(states[i : i + self.batch_size]).view(-1, len(self.action_space))
-            loss = torch.mean(self.loss_fn(predictions, actions[i : i + self.batch_size]) * Gs[i : i + self.batch_size])
-            loss.backward()
-            self.optimizer.step()
+        predictions = self.model(states).view(len(frewards), -1)
+        predictions = predictions[:, :129]
+        loss = torch.mean(self.loss_fn(predictions, actions) * frewards)
 
-        self.memory_position = 0
+        loss.backward()
+        self.optimizer.step()
 
     def set_lr(self, lr):
         for g in self.optimizer.param_groups:
@@ -173,7 +230,7 @@ class DnDAgentPolicyGradient():
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        for x in ['model', 'optimizer']:
+        for x in ['model', 'optimizer', 'legal_moves_masker']:
             state.pop(x)
 
         return state
@@ -181,4 +238,4 @@ class DnDAgentPolicyGradient():
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()
-        self.optimizer = torch.optim.Adam(self.model.parameters())
+        self.optimizer = torch.optim.RMSprop(self.model.parameters())
