@@ -39,7 +39,7 @@ class RenderUnit:
     def getUID(self) -> str:
         return self.unitUID
     
-    def getPos(self) -> np.array:
+    def getPos(self) -> np.ndarray:
         return self.pos
     
     def getTeamColor(self) -> Tuple[int, int, int]:
