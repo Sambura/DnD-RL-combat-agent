@@ -2,6 +2,7 @@ import numpy as np
 from enum import IntEnum
 import re
 from typing import List
+import itertools
 
 if __name__ == '__main__':
     import sys
@@ -103,13 +104,14 @@ class DnDBoard():
         return self.board[position] is not None
 
     def initialize_game(self, check_empty: bool=True):
-        #TODO: check UIDs for uniqueness
-        self.units = self.board[self.board != None].flatten().tolist()
+        self.units:List[Unit] = self.board[self.board != None].flatten().tolist()
         if check_empty and len(self.units) == 0:
             raise RuntimeError('The board is empty')
         
-        # Assign turn order
-        self.set_turn_order(random.sample(list(range(len(self.units))), len(self.units)))
+        turn_order = sorted(range(len(self.units)), key=lambda i : self.units[i].roll_initiative())
+        # turn_order = random.sample(list(range(len(self.units))), len(self.units))
+        # print(turn_order)
+        self.set_turn_order(turn_order)
         
     def set_turn_order(self, turn_order: list[Unit], current_index: int=0):
         self.turn_order = turn_order

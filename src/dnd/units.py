@@ -1,8 +1,9 @@
 from typing import List
 from .actions import MeleeWeaponAttack, Action
+from random import randrange
 
 class Unit:
-    def __init__(self, name, health, speed, AC, UID, CR = 1) -> None:
+    def __init__(self, name, health, speed, AC, init=0, UID=None, CR=1) -> None:
         self.UID = UID
         self.health = health
         self.name = name
@@ -10,6 +11,7 @@ class Unit:
         self.actions: List[Action] = []
         self.pos = None
         self.AC = AC # TODO: rename?
+        self.init = init
         self.melee_attack = None
         self.CR = CR
 
@@ -26,6 +28,8 @@ class Unit:
         self.actions.append(action)
 
     def is_alive(self): return self.health > 0
+    
+    def roll_initiative(self): return randrange(1, 20) + self.init*1.01
 
     def __str__(self): return self.name
 

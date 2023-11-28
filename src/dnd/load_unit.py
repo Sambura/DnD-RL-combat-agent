@@ -29,10 +29,11 @@ def load_unit(json_path:str, rollHP=False) -> Unit:
   battleStats = data['battleStats']
   CR = battleStats['CR']
   AC = battleStats['AC']
+  init = battleStats['init']
   HP = roll(battleStats['HP']) if rollHP else roll_avg(battleStats['HP'])
   cellSpeed = battleStats['speed']//5 #5 feet per cell
   attacks = data['battleStats']['attacks']
-  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, AC=AC, UID=None, CR = CR)
+  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, AC=AC, init=init, UID=None, CR = CR)
   
   for attack in attacks:
     if attack['type'] == 'meleeWeaponAttack':
