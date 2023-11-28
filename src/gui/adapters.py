@@ -3,8 +3,8 @@ from typing import Tuple
 import numpy as np
 
 class Team:
-    def __init__(self, name:str, color:Tuple[int, int, int] = None, model_path:str = None) -> None:
-        self.model_path = model_path
+    def __init__(self, name:str, color:Tuple[int, int, int] = None, agent = None) -> None:
+        self.agent = agent
         self.name = name
         if color == None:
             self.color = tuple(np.random.random_integers(low=0, high=255, size=3))
@@ -12,7 +12,7 @@ class Team:
             self.color = color
         
     def is_controlled_by_player(self):
-        return self.model_path is None
+        return self.agent is None
     
     def get_color(self):
         return self.color
