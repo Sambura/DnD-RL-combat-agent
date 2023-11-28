@@ -1,0 +1,27 @@
+{
+  "tokenName": "Brown Bear",
+  "tokenImage": "Brown Bear.png",
+  "battleStats": {
+    "CR": 1.0,
+    "AC": 11,
+    "init": 0,
+    "HP": "4d10+12",
+    "speed": 40,
+    "attacks": [
+      {
+        "type": "meleeWeaponAttack",
+        "name": "Claws",
+        "range": 5,
+        "hit": 6,
+        "damage": "2d6+4"
+      },
+      {
+        "type": "meleeWeaponAttack",
+        "name": "Bite",
+        "range": 5,
+        "hit": 6,
+        "damage": "1d8+4"
+      }
+    ]
+  }
+}
