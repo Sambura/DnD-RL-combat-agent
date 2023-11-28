@@ -24,6 +24,7 @@ class RenderUnit:
     def __init__(self, unitUID: int, pos: Tuple[int, int], token: Image, team: Team = None) -> None:
         self.unitUID = unitUID
         self.team = team
+        self.pos = np.ndarray[int, int]
         if pos is None:
             pos = np.array([0, 0], dtype=int)
         else:
@@ -39,6 +40,9 @@ class RenderUnit:
     def getUID(self) -> str:
         return self.unitUID
     
+    def setPos(self, pos) -> None:
+        self.pos = np.array(pos, dtype = int)
+
     def getPos(self) -> np.ndarray:
         return self.pos
     

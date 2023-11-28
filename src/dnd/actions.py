@@ -40,12 +40,13 @@ class Attack(Action):
         else:
             hit_chance = (target_unit.AC - self.hit + 1) / 20
             target_unit.take_damage(hit_chance * self.average_damage)
+            return (999, hit_chance * self.average_damage)
 
-    def check_action_legal(self, game, source_unit, target_unit):
+    def check_action_legal(self, game, source_unit, target_unit, roll=None):
         return (target_unit is not None) and (manhattan_distance(source_unit.pos, target_unit.pos) <= self.range)
     
-    def instantiate(self, source_unit, target_unit):
-        return ActionInstance(self, source_unit=source_unit, target_unit=target_unit)
+    def instantiate(self, source_unit, target_unit, **kwargs):
+        return ActionInstance(self, source_unit=source_unit, target_unit=target_unit, **kwargs)
     
     def __deepcopy__(self, memo):
         cls = self.__class__
