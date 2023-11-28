@@ -266,6 +266,7 @@ class DnDAgent():
     def __getstate__(self):
         state = self.__dict__.copy()
         for x in ['on_replace', 'random_action_resolver', 'eval_model', 'next_model', 'optimizer']:
+            if x not in state and self.stripped: continue
             state.pop(x)
 
         return state
