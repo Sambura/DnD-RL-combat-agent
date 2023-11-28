@@ -2,6 +2,7 @@ from ..utils.common import manhattan_distance
 from dice import parse_expression
 from dice.utilities import single
 from dice.constants import DiceExtreme
+from copy import deepcopy, copy
 # from .game_board import DnDBoard # Causes circular import
 # from .units import Unit # Causes circular import
 
@@ -45,6 +46,19 @@ class Attack(Action):
     
     def instantiate(self, source_unit, target_unit):
         return ActionInstance(self, source_unit=source_unit, target_unit=target_unit)
+    
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if k == 'parsed_hit' or 'parsed_damage':
+                # print(k, v)
+                setattr(result, k, copy(v))
+            else:
+                setattr(result, k, copy(v))
+                # setattr(result, k, deepcopy(v, memo))
+        return result
 
     
 class MeleeWeaponAttack(Attack):
