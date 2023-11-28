@@ -89,16 +89,18 @@ def print_turn_info(turn_info):
         elif action == 'pass':
             print('Unit finishes turn')
 
-def place_unit_randomly_sparse(game: DnDBoard, unit: Unit, player_id: int):
+def place_unit_randomly_sparse(game: DnDBoard, unit: Unit, player_id: int, generateUID=False):
     """Randomly places a unit on the board. Works best for sparse boards"""
     while True:
         coords = get_random_coords(*game.board_shape)
         if game.is_occupied(coords): continue
 
         game._place_unit(unit, coords, player_id)
+        if generateUID:
+            game.assign_UID(unit)
         return coords
     
-def place_unit_randomly_dense(game: DnDBoard, unit: Unit, player_id: int):
+def place_unit_randomly_dense(game: DnDBoard, unit: Unit, player_id: int, generateUID=False):
     """
     Randomly places a unit on the board. Works best for dense boards. \
     In practice works faster than sparse version when at least 80% of the cells are occupied
@@ -107,6 +109,8 @@ def place_unit_randomly_dense(game: DnDBoard, unit: Unit, player_id: int):
     index = random.randrange(len(xs))
     coords = (ys[index], xs[index])
     game._place_unit(unit, coords, player_id)
+    if generateUID:
+        game.assign_UID(unit)
     return coords
 
 def get_legal_moves(game: DnDBoard):
@@ -151,7 +155,7 @@ class FieldGenerator:
         self.units.append((load_unit(json_path), load_renderUnit(json_path)))
         return self
     
-    def generate_balanced_game(self, targetCR:float = 5, minTypes:int = 1, maxTypes:int = 4, maxUnitsPerType:int = 4, initialize = True):
+    def generate_balanced_game(self, targetCR:float = 5, minTypes:int = 1, maxTypes:int = 4, maxUnitsPerType:int = 4, initialize = True, generateUID = False):
         self.units.sort(key = lambda x: x[0].CR)
         for player_id in range(self.player_count):
             unitTypeNumber = random.randint(1, min(maxTypes, max(int(targetCR*4), minTypes)))
@@ -170,11 +174,16 @@ class FieldGenerator:
                 # print(groupCR/unit[0].CR)
                 for _ in range(int(groupCR/unit[0].CR)):
                     # print(_, 'placing', unit[0].name)
-                    pos = place_unit_randomly_sparse(self.game, deepcopy(unit[0]), player_id)
+                    unit_copy = deepcopy(unit[0])
+                    pos = place_unit_randomly_sparse(self.game, unit_copy, player_id, generateUID=generateUID)
                     self.renderUnits.append(deepcopy(unit[1]))
                     self.renderUnits[-1].pos = pos
+                    if generateUID:
+                        self.renderUnits[-1].unitUID = unit_copy.get_UID()
                     if self.teams is not None:
                         self.renderUnits[-1].team = self.teams[player_id]
+
+
         if initialize:
             self.game.initialize_game()
         return self.game
