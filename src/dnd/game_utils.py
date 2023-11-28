@@ -130,12 +130,13 @@ def constrained_sum_sample_pos(n: int, total:int):
     dividers = sorted(random.sample(range(1, total), n - 1))
     return np.array([a - b for a, b in zip(dividers + [total], [0] + dividers)])
 
-class fieldGenerator:
-    def __init__(self, board_size: Tuple[int, int], player_count: int=2) -> None:
+class FieldGenerator:
+    def __init__(self, board_size: Tuple[int, int], player_count: int=2, teams = None) -> None:
         self.game = DnDBoard(board_size)
         self.player_count = player_count
         self.units:List[Tuple[Unit, RenderUnit]] = []
         self.renderUnits:List[RenderUnit] = []
+        self.teams = teams
 
     def load_from_folder(self, json_path: str, verbose=False):
         json_folder = os.path.abspath(json_path)
@@ -150,7 +151,7 @@ class fieldGenerator:
         self.units.append((load_unit(json_path), load_renderUnit(json_path)))
         return self
     
-    def generate_balanced_game(self, targetCR:float = 5, minTypes:int = 1, maxTypes:int = 4, maxUnitsPerType:int = 4):
+    def generate_balanced_game(self, targetCR:float = 5, minTypes:int = 1, maxTypes:int = 4, maxUnitsPerType:int = 4, initialize = True):
         self.units.sort(key = lambda x: x[0].CR)
         for player_id in range(self.player_count):
             unitTypeNumber = random.randint(1, min(maxTypes, max(int(targetCR*4), minTypes)))
@@ -168,10 +169,14 @@ class fieldGenerator:
                 unit = random.choice(viableUnits)
                 # print(groupCR/unit[0].CR)
                 for _ in range(int(groupCR/unit[0].CR)):
+                    # print(_, 'placing', unit[0].name)
                     pos = place_unit_randomly_sparse(self.game, deepcopy(unit[0]), player_id)
                     self.renderUnits.append(deepcopy(unit[1]))
                     self.renderUnits[-1].pos = pos
-        self.game.initialize_game()
+                    if self.teams is not None:
+                        self.renderUnits[-1].team = self.teams[player_id]
+        if initialize:
+            self.game.initialize_game()
         return self.game
     
     def getRenderUnits(self):
