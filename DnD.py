@@ -207,7 +207,7 @@ with gr.Blocks() as demo:
                                choices=list(zip([team.get_name() for team in teams], itertools.count())))
       team_color = gr.ColorPicker(value=RGB_to_Hex(teams[0].get_color()), label="Team color")
       team_agent_path = gr.File(label="Team Agent folder", file_count='directory')
-      assign_agent = gr.Button(label="assign Agent")
+      assign_agent = gr.Button(value="assign Agent")
       team_name1.input(team_selection, inputs=[team_name1], outputs=[team_name1, team_color, team_agent_path])
       team_color.input(team_set_color, inputs=[team_color, team_name1])
       assign_agent.click(team_set_agent, inputs=[team_agent_path, team_name1])
