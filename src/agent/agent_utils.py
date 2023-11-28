@@ -56,10 +56,10 @@ def get_states_seq(game: DnDBoard,
 
     return state, action_vector, new_coords, action
 
-def get_legal_action_resolver(board_size, sequential_actions=False):
+def get_legal_action_resolver(board_size, sequential_actions=False, kind='old'):
     yi, xi = np.meshgrid(np.arange(board_size[0]), np.arange(board_size[1]), indexing='ij')
 
-    def resolver(state: np.ndarray[np.float32]):
+    def old_resolver(state: np.ndarray[np.float32]):
         current_unit_pos = np.where(state[2] != 0)
         y, x = current_unit_pos[0][0], current_unit_pos[1][0]
         current_unit_speed = state[3, y, x]
@@ -77,6 +77,35 @@ def get_legal_action_resolver(board_size, sequential_actions=False):
         return [
             [possible_positions[0][pos_index], possible_targets[0][target_index]],
             [possible_positions[1][pos_index], possible_targets[1][target_index]]
+        ]
+    
+    def resolver(state: np.ndarray[np.float32]):
+        current_unit_pos = np.where(state[2] != 0)
+        y, x = current_unit_pos[0][0], current_unit_pos[1][0]
+        current_unit_speed = state[3, y, x]
+
+        occupied = np.logical_or(state[0], state[1])
+        occupied[y, x] = 0
+
+        distance = np.abs(yi - y) + np.abs(xi - x)
+        possible_positions = np.where(np.logical_and(distance <= current_unit_speed, occupied == 0))
+
+        pos_index = random.randrange(len(possible_positions[0]))
+
+        new_y, new_x = possible_positions[0][pos_index], possible_positions[1][pos_index]
+        distance_new = np.abs(yi - new_y) + np.abs(xi - new_x)
+        attack_range = state[4, y, x]
+        possible_targets = np.where(np.logical_and(state[1], distance_new <= attack_range))
+
+        if len(possible_targets[0]) > 0:
+            target_index = random.randrange(len(possible_targets[0]))
+            target_y, target_x = possible_targets[0][target_index], possible_targets[1][target_index]
+        else:
+            target_y, target_x = get_random_coords(*state.shape[1:])
+
+        return [
+            [new_y, target_y],
+            [new_x, target_x]
         ]
     
     PASS_CHANCE = 0.02
@@ -110,7 +139,11 @@ def get_legal_action_resolver(board_size, sequential_actions=False):
 
         return (2, *get_random_coords(board_size[0], board_size[1]))
 
-    return sequential_resolver if sequential_actions else resolver
+    resolvers = {
+        'old': old_resolver,
+        'new': resolver
+    }
+    return sequential_resolver if sequential_actions else resolvers[kind]
 
 def agent_take_turn(game: DnDBoard, agent: DnDAgent, state_indices: list[int]=None, get_turn_info: bool=False):
     actions = []
