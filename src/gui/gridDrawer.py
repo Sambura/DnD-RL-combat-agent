@@ -22,22 +22,20 @@ def draw_field(renderUnits: List[RenderUnit], selectedToken, gridScale = None, g
     token = unit.getToken(gridScale)
     position = (1 + unit.pos[1]*(gridScale + 1), 1 + unit.pos[0]*(gridScale + 1))
     field.paste(token, position, token)
-  if selectedToken is not None and selectedToken != '':
-    field = highlight_selected_token(renderUnits, field, gridScale, selectedToken)
+  field = highlight_selected_token(renderUnits, field, gridScale, selectedToken)
   return field
 
-def highlight_selected_token(renderUnits: List[RenderUnit], field: Image, gridScale, selection):
+def highlight_selected_token(renderUnits: List[RenderUnit], field: Image, gridScale, selectedToken):
   draw = ImageDraw.Draw(field)
   for renderUnit in renderUnits:
     y, x = renderUnit.getPos()
-    token_position = np.array([x, y])
     token_team_color = renderUnit.getTeamColor()
-    position = [1+x*(gridScale + 1), 
-                1+y*(gridScale + 1), 
-                1+(x+1)*(gridScale + 1), 
-                1+(y+1)*(gridScale + 1)]
-    if renderUnit == renderUnits[selection]:
-      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=3)
+    position = [x*(gridScale + 1), 
+                y*(gridScale + 1), 
+                (x+1)*(gridScale + 1), 
+                (y+1)*(gridScale + 1)]
+    if selectedToken is not None and renderUnit == renderUnits[selectedToken]:
+      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=gridScale//16)
     else:
-      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=2)       
+      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=gridScale//30)       
   return field
