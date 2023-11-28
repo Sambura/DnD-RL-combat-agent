@@ -66,7 +66,7 @@ def getTokenImagePath(json_path:str, gradio = False) -> Image:
     json_folder = 'Tokens'
   else:
     json_folder = path.dirname(path.abspath(json_path))
-  return json_folder+'\\'+data['tokenImage']
+  return json_folder+'/'+data['tokenImage']
 
 def getTokenName(json_path:str) -> str:
   data = parse_json(json_path)
