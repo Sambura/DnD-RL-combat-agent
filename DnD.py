@@ -2,11 +2,14 @@ from src.dnd.units import Unit, GenericSoldier
 from src.utils.common import RGB_to_Hex, Hex_to_RGB
 from src.dnd.game_board import DnDBoard, MovementError
 from src.gui.gridDrawer import generate_grid, draw_field
-from src.gui.adapters import RenderUnit, Team
+from src.gui.RenderUnit import RenderUnit
+from src.gui.Team import Team
 from src.dnd.load_unit import load_unit, load_renderUnit, getTokenImagePath, getTokenName
-from src.dnd.game_utils import FieldGenerator, decorate_game, print_game
+from src.dnd.FieldGenerator import FieldGenerator
 from src.agent.agent import DnDAgent
+from src.agent.agent_utils import agent_take_turn
 
+import os
 from PIL import ImageColor
 from typing import List
 import gradio as gr
@@ -22,7 +25,7 @@ render_units: List[RenderUnit] = []
 selectedToken = None
 selectedCell = None #TODO
 teams:List[Team] = [Team('Player',(0,0,255)),
-                    Team('Agent', (255,0,0), agent=['agents/gen16-11.3i-80.0k/agent.pkl', 'agents/gen16-11.3i-80.0k/eval_model.pt'])]
+                    Team('Agent', (255,0,0), agent_path='agents/gen16-11.3i-80.0k')]
 fieldGenerator:FieldGenerator = None
 
 def get_render_unit_by_UID(UID):
@@ -88,7 +91,7 @@ def on_board_click(boardImg, gridScale, evt: gr.SelectData):
   index = None
   if not board.is_initialized():
     try:
-      index = [tuple(x.getPos()) for x in render_units].index(clickedCell)
+      index = [tuple(x.getPos()) for x in render_units if x.render].index(clickedCell)
     except ValueError:
       pass
   else:
@@ -105,7 +108,8 @@ def team_selection(team):
   new_choices = list(zip(team_names, itertools.count()))
   return (gr.Dropdown.update(choices=new_choices, interactive=True), 
           RGB_to_Hex(teams[team].get_color()),
-          gr.File.update(teams[team].agent))
+          teams[team].agent_path,
+          teams[team].agent_path)
 
 def team_selection2(team):
   if type(team) is not int: #returned raw string <- user assigned new team
@@ -126,11 +130,17 @@ def team_set_color(team_color, team):
 def team_set_agent(team_agent_path, team):
   if type(team) is not int: #returned raw string <- user assigned new team
     team = len(teams)-1
-  if type(team_agent_path) is str: 
-    print(team_agent_path)
-    teams[team].agent = DnDAgent.load_agent(team_agent_path, strip=True, epsilon=0) #TODO
+  if team_agent_path == '':
+    teams[team].agent_path = None
   else:
-     raise TypeError("unexpected type of model_path")
+    if type(team_agent_path) is str: 
+      if os.path.isfile(team_agent_path+'/agent.pkl') and os.path.isfile(team_agent_path+'/eval_model.pt'):
+        teams[team].agent_path = team_agent_path #TODO
+      else:
+        raise FileExistsError("can't find model data in designated folder")
+    else:
+      raise TypeError("unexpected type of model_path")
+  return teams[team].agent_path
 
 def generate_game():
   global board, render_units, fieldGenerator
@@ -141,14 +151,20 @@ def generate_game():
 def initialize_game():
   global board
   board.initialize_game()
+  for i in range(len(teams)):
+    teams[i].initialize_agent()
   return (gr.Button.update(visible=False),
-          gr.Button.update(visible=False),
-          # gr.Dataframe.update(visible=True),
-          gr.Dataframe.update(visible=True),
-          gr.Dropdown.update(visible=True),
-          gr.Number.update(visible=True),
-          gr.Number.update(visible=True),
-          gr.Number.update(visible=True))
+      gr.Button.update(visible=False),
+      gr.Dataframe.update(visible=True),
+      gr.Dropdown.update(visible=True),
+      gr.Number.update(visible=True),
+      gr.Number.update(visible=True),
+      gr.Number.update(visible=True),
+      gr.Button.update(visible=True),
+      gr.Number.update(visible=True),
+      gr.Button.update(visible=True),
+      gr.Button.update(visible=True),
+      gr.Button.update(visible=True))
 
 def end_turn():
   global board
@@ -161,6 +177,12 @@ def update_turn_queue():
             board.units[i].get_initiative(),
             f'{board.units[i].health}/{board.units[i].maxHealth}'] 
             for i in board.turn_order]
+  for i in range(len(render_units)):
+    boardUnit:Unit = board.get_unit_by_UID(render_units[i].getUID())
+    if boardUnit is None:
+      render_units[i].die()
+    else:
+      render_units[i].setPos(boardUnit.pos)
   return gr.DataFrame.update(np.roll(df_data, -board.current_turn_index, axis=0)),\
          [x.getUID() for x in render_units].index(board.current_unit.get_UID())
 
@@ -177,9 +199,9 @@ def attack_click(target_x, target_y, selected_action):
   print(target_unit.get_UID())
   action = source_unit.actions[selected_action].instantiate(source_unit=source_unit, target_unit=target_unit, roll=True)
   attacked, updates = board.use_action(action)
+  print(updates)
   for dead_unit in updates['units_removed']:
-    render_units.remove(get_render_unit_by_UID(dead_unit.get_UID()))
-  print(f'{updates=}')
+    get_render_unit_by_UID(dead_unit.get_UID()).die()
   print('(attack, damage) =', board.get_last_roll_info())
   
 def move_click(target_x, target_y):
@@ -189,6 +211,12 @@ def move_click(target_x, target_y):
     get_render_unit_by_UID(board.current_unit.get_UID()).setPos((target_y, target_x)) 
   # print_game(*decorate_game(board))
   return(board.current_movement_left)
+
+def actors_act_once():
+  acting_team = get_render_unit_by_UID(board.current_unit.get_UID()).team
+  if not acting_team.is_controlled_by_player():
+     turn_info = agent_take_turn(board, acting_team.loaded_agent, acting_team.state_indices, True)
+     print(turn_info)
 
 
 with gr.Blocks() as demo:
@@ -205,12 +233,16 @@ with gr.Blocks() as demo:
       team_name1 = gr.Dropdown(value=0, label="Team Name", allow_custom_value=True,
                                info="Enter new team name to create new team",
                                choices=list(zip([team.get_name() for team in teams], itertools.count())))
-      team_color = gr.ColorPicker(value=RGB_to_Hex(teams[0].get_color()), label="Team color")
-      team_agent_path = gr.File(label="Team Agent folder", file_count='directory')
-      assign_agent = gr.Button(label="assign Agent")
-      team_name1.input(team_selection, inputs=[team_name1], outputs=[team_name1, team_color, team_agent_path])
+      with gr.Row():
+        team_color = gr.ColorPicker(value=RGB_to_Hex(teams[0].get_color()), label="Team color")
+        cached_agent_path = gr.Textbox(label="Cached Agent folder")
+      team_agent_path = gr.Textbox(label="Team Agent folder")
+      assign_agent = gr.Button(value="assign Agent")
+      agent_folders = ['agents/'+folder for folder in next(os.walk('./agents/'))[1]] + ['']
+      agent_examples = gr.Examples(examples=agent_folders, inputs=[team_agent_path])
+      team_name1.input(team_selection, inputs=[team_name1], outputs=[team_name1, team_color, team_agent_path, cached_agent_path])
       team_color.input(team_set_color, inputs=[team_color, team_name1])
-      assign_agent.click(team_set_agent, inputs=[team_agent_path, team_name1])
+      assign_agent.click(team_set_agent, inputs=[team_agent_path, team_name1], outputs=[cached_agent_path])
     
   #Add Token  
     with gr.TabItem("Add Token") as tab1:
@@ -257,9 +289,12 @@ with gr.Blocks() as demo:
           with gr.Row():
             target_x = gr.Number(value=0, label="target x", precision=0, visible=False)
             target_y = gr.Number(value=0, label="target y", precision=0, visible=False)
-          attack_btn = gr.Button(value = 'Attack')
-          move_btn = gr.Button(value = 'Move')
-          btn_end_turn = gr.Button(value = 'end_turn')
+          attack_btn = gr.Button(value = 'Attack', visible=False)
+          move_btn = gr.Button(value = 'Move', visible=False)
+          btn_end_turn = gr.Button(value = 'end_turn', visible=False)
+          with gr.Row():
+            btn_actor_act = gr.Button(value = 'actors act', visible=False)
+            number_actors_act = gr.Number(value=0, precision=0, visible=False)
 
     makeBoard.click(generate_board, inputs = [gridScale, new_board_size], outputs=[im_canvas])
     gridScale.change(render_field, inputs = [gridScale, target_x, target_y], outputs=[im_canvas])
@@ -277,7 +312,12 @@ with gr.Blocks() as demo:
     game_generate.click(generate_game)\
       .then(update_UID_list, outputs=tokenID)\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
-    game_start.click(initialize_game, outputs=[game_generate, game_start, turn_order, selected_action, game_movement_left, target_x, target_y])\
+    game_start.click(initialize_game, 
+                     outputs=[game_generate, game_start, 
+                              turn_order, selected_action, 
+                              game_movement_left, target_x, target_y, 
+                              btn_actor_act, number_actors_act, 
+                              attack_btn, move_btn, btn_end_turn])\
       .then(update_turn_queue, outputs=[turn_order, tokenID])\
       .then(update_action_list, outputs=[selected_action])\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
@@ -287,9 +327,15 @@ with gr.Blocks() as demo:
     target_y.change(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     target_x.change(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     attack_btn.click(attack_click, inputs=[target_x, target_y, selected_action])\
-      .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)\
-      .then(update_turn_queue, outputs=[turn_order, tokenID])
+      .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     move_btn.click(move_click, inputs=[target_x, target_y], outputs=[game_movement_left])\
+      .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
+    btn_actor_act.click(actors_act_once)\
+      .then(end_turn)\
+      .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(update_action_list, outputs=[selected_action])\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
 
 if __name__ == "__main__":

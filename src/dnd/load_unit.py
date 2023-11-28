@@ -10,12 +10,12 @@ from os import path
 if __name__ == '__main__':
     import sys
     sys.path.append( path.dirname( path.dirname( path.dirname( path.abspath(__file__)))))
-    from src.gui.adapters import RenderUnit 
+    from src.gui.RenderUnit import RenderUnit 
     from src.dnd.units import Unit
     from src.dnd.actions import *
     from src.utils.common import roll_avg
 else: 
-    from ..gui.adapters import RenderUnit
+    from ..gui.RenderUnit import RenderUnit
     from ..utils.common import roll_avg
     from .units import Unit
     from .actions import *

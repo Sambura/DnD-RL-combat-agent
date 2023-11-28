@@ -1,5 +1,5 @@
 from typing import List, Tuple
-from .adapters import RenderUnit
+from .RenderUnit import RenderUnit
 from PIL import Image, ImageDraw
 import numpy as np
 from ..dnd.units import Unit
@@ -19,9 +19,10 @@ def generate_grid(grid_size = 5, space = 10) -> Image:
 def draw_field(renderUnits: List[RenderUnit], gridScale, board_size, selectedToken = None, target=None) -> Image:
   field = generate_grid(board_size, gridScale)
   for unit in renderUnits:
-    token = unit.getToken(gridScale)
-    position = (1 + unit.pos[1]*(gridScale + 1), 1 + unit.pos[0]*(gridScale + 1))
-    field.paste(token, position, token)
+    if unit.render:
+      token = unit.getToken(gridScale)
+      position = (1 + unit.pos[1]*(gridScale + 1), 1 + unit.pos[0]*(gridScale + 1))
+      field.paste(token, position, token)
   field = highlight_tokens(field, renderUnits, gridScale, selectedToken)
   if target is not None:
     field = highlight_target(field, target, gridScale)
@@ -30,16 +31,17 @@ def draw_field(renderUnits: List[RenderUnit], gridScale, board_size, selectedTok
 def highlight_tokens(field: Image, renderUnits: List[RenderUnit], gridScale, selectedToken):
   draw = ImageDraw.Draw(field)
   for renderUnit in renderUnits:
-    y, x = renderUnit.getPos()
-    token_team_color = renderUnit.getTeamColor()
-    position = [x*(gridScale + 1), 
-                y*(gridScale + 1), 
-                (x+1)*(gridScale + 1), 
-                (y+1)*(gridScale + 1)]
-    if selectedToken is not None and renderUnit == renderUnits[selectedToken]:
-      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=gridScale//16)
-    else:
-      draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=gridScale//30)       
+    if renderUnit.render:
+      y, x = renderUnit.getPos()
+      token_team_color = renderUnit.getTeamColor()
+      position = [x*(gridScale + 1), 
+                  y*(gridScale + 1), 
+                  (x+1)*(gridScale + 1), 
+                  (y+1)*(gridScale + 1)]
+      if selectedToken is not None and renderUnit == renderUnits[selectedToken]:
+        draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=gridScale//16)
+      else:
+        draw.rounded_rectangle(position, radius=gridScale/10, outline=token_team_color, width=gridScale//30)       
   return field
 
 def highlight_target(field: Image, target: Tuple[int, int], gridScale):

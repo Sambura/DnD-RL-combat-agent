@@ -58,7 +58,10 @@ class DnDBoard():
         return np.array([unit.get_UID() for unit in self.units])
 
     def get_unit_by_UID(self, UID:str) -> Unit:
-        return self.units[np.where(self.get_UIDs() == UID)[0][0]]
+        try:
+            return self.units[np.where(self.get_UIDs() == UID)[0][0]]
+        except IndexError:
+            return None
 
     def assign_UID(self, unit: Unit) -> None:
         """Assigns UID based on the name of the unit"""
