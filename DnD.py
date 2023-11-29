@@ -103,7 +103,8 @@ def team_selection(team):
     teams.append(Team(team))
     team = len(teams)-1
     global fieldGenerator
-    fieldGenerator = FieldGenerator((board_size, board_size), len(teams), teams)
+    if board_size is not None:
+      fieldGenerator = FieldGenerator((board_size, board_size), len(teams), teams)
   team_names = [team.get_name() for team in teams]
   new_choices = list(zip(team_names, itertools.count()))
   return (gr.Dropdown.update(choices=new_choices, interactive=True), 
@@ -116,7 +117,8 @@ def team_selection2(team):
     teams.append(Team(team))
     team = len(teams)-1
     global fieldGenerator
-    fieldGenerator = FieldGenerator((board_size, board_size), len(teams), teams)
+    if board_size is not None:
+      fieldGenerator = FieldGenerator((board_size, board_size), len(teams), teams)
   team_names = [team.get_name() for team in teams]
   new_choices = list(zip(team_names, itertools.count()))
   return gr.Dropdown.update(choices=new_choices, interactive=True)
@@ -142,10 +144,10 @@ def team_set_agent(team_agent_path, team):
       raise TypeError("unexpected type of model_path")
   return teams[team].agent_path
 
-def generate_game():
+def generate_game(targetCR):
   global board, render_units, fieldGenerator
   fieldGenerator.reset()
-  board = fieldGenerator.load_from_folder(json_path='./Tokens', verbose=True).generate_balanced_game(targetCR=1, initialize=False, generateUID=True)
+  board = fieldGenerator.load_from_folder(json_path='./Tokens', verbose=True).generate_balanced_game(targetCR=targetCR, initialize=False, generateUID=True)
   render_units = fieldGenerator.getRenderUnits()
 
 def initialize_game():
@@ -154,6 +156,7 @@ def initialize_game():
   for i in range(len(teams)):
     teams[i].initialize_agent()
   return (gr.Button.update(visible=False),
+      gr.Slider.update(visible=False),
       gr.Button.update(visible=False),
       gr.Dataframe.update(visible=True),
       gr.Dropdown.update(visible=True),
@@ -177,14 +180,17 @@ def update_turn_queue():
             board.units[i].get_initiative(),
             f'{board.units[i].health}/{board.units[i].maxHealth}'] 
             for i in board.turn_order]
+  return gr.DataFrame.update(np.roll(df_data, -board.current_turn_index, axis=0)),\
+         [x.getUID() for x in render_units].index(board.current_unit.get_UID())
+
+def update_dead_units():
   for i in range(len(render_units)):
     boardUnit:Unit = board.get_unit_by_UID(render_units[i].getUID())
     if boardUnit is None:
       render_units[i].die()
     else:
       render_units[i].setPos(boardUnit.pos)
-  return gr.DataFrame.update(np.roll(df_data, -board.current_turn_index, axis=0)),\
-         [x.getUID() for x in render_units].index(board.current_unit.get_UID())
+
 
 def update_action_list():
   attacks = [action.name for action in board.current_unit.actions]
@@ -215,8 +221,17 @@ def move_click(target_x, target_y):
 def actors_act_once():
   acting_team = get_render_unit_by_UID(board.current_unit.get_UID()).team
   if not acting_team.is_controlled_by_player():
-     turn_info = agent_take_turn(board, acting_team.loaded_agent, acting_team.state_indices, True)
-     print(turn_info)
+    turn_info = agent_take_turn(board, acting_team.loaded_agent, acting_team.state_indices, True)
+
+def actors_act(number_actors_act):
+  turns_made = 0
+  while turns_made < number_actors_act or number_actors_act == -1:
+    acting_team = get_render_unit_by_UID(board.current_unit.get_UID()).team
+    if acting_team.is_controlled_by_player() or board.is_game_over():
+      return
+    actors_act_once()
+    turns_made+=1
+  update_turn_queue() 
 
 
 with gr.Blocks() as demo:
@@ -225,7 +240,7 @@ with gr.Blocks() as demo:
     new_board_size = gr.Slider(label="Board Size", value=10, minimum=2, maximum=100, step=1)
     makeBoard = gr.Button(value="Make Board")
   gridScale = gr.Slider(label="gridScale", value=64, minimum=16, maximum=128, step=1)
-  im_canvas = gr.Image(interactive=False)
+  im_canvas = gr.Image(interactive=False, height=600)
 
   with gr.Tabs(visible=True) as tabs:
     #Team Setup
@@ -269,7 +284,9 @@ with gr.Blocks() as demo:
       btn_move = gr.Button(value="Move token")
     
     with gr.TabItem("Play the game") as tab3:
-      game_generate = gr.Button(value="Generate random board")
+      with gr.Row():
+        game_generate = gr.Button(value="Generate random board")
+        targetCR = gr.Slider(value=1, step=0.25, minimum=0.25, maximum=10)
       game_start = gr.Button(value="Initialize game")
 
       with gr.Row():
@@ -284,6 +301,9 @@ with gr.Blocks() as demo:
             label="Turn Order",
           )
         with gr.Column():
+          with gr.Row():
+            btn_actor_act = gr.Button(value = 'actors act', visible=False)
+            number_actors_act = gr.Number(value=0, precision=0, visible=False, show_label=False)
           selected_action = gr.Dropdown(choices=['sample1', 'sample2'], label='Selected Action', visible=False, interactive=True)
           game_movement_left = gr.Number(value=6, label='Movement left', interactive=False, visible=False)
           with gr.Row():
@@ -292,9 +312,6 @@ with gr.Blocks() as demo:
           attack_btn = gr.Button(value = 'Attack', visible=False)
           move_btn = gr.Button(value = 'Move', visible=False)
           btn_end_turn = gr.Button(value = 'end_turn', visible=False)
-          with gr.Row():
-            btn_actor_act = gr.Button(value = 'actors act', visible=False)
-            number_actors_act = gr.Number(value=0, precision=0, visible=False)
 
     makeBoard.click(generate_board, inputs = [gridScale, new_board_size], outputs=[im_canvas])
     gridScale.change(render_field, inputs = [gridScale, target_x, target_y], outputs=[im_canvas])
@@ -309,32 +326,36 @@ with gr.Blocks() as demo:
     btn_move.click(move_token, inputs=[tokenID, x_move, y_move])\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     
-    game_generate.click(generate_game)\
+    game_generate.click(generate_game, targetCR)\
       .then(update_UID_list, outputs=tokenID)\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     game_start.click(initialize_game, 
-                     outputs=[game_generate, game_start, 
+                     outputs=[game_generate, targetCR, game_start, 
                               turn_order, selected_action, 
                               game_movement_left, target_x, target_y, 
                               btn_actor_act, number_actors_act, 
                               attack_btn, move_btn, btn_end_turn])\
       .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(update_dead_units)\
       .then(update_action_list, outputs=[selected_action])\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     btn_end_turn.click(end_turn)\
       .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(update_dead_units)\
       .then(update_action_list, outputs=[selected_action])
     target_y.change(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     target_x.change(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     attack_btn.click(attack_click, inputs=[target_x, target_y, selected_action])\
       .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(update_dead_units)\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
     move_btn.click(move_click, inputs=[target_x, target_y], outputs=[game_movement_left])\
       .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(update_dead_units)\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
-    btn_actor_act.click(actors_act_once)\
-      .then(end_turn)\
+    btn_actor_act.click(actors_act, inputs=[number_actors_act])\
       .then(update_turn_queue, outputs=[turn_order, tokenID])\
+      .then(update_dead_units)\
       .then(update_action_list, outputs=[selected_action])\
       .then(render_field, inputs=[gridScale, target_x, target_y], outputs=im_canvas)
 
