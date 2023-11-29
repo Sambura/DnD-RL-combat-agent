@@ -266,6 +266,14 @@ class DnDBoard():
         
         return True
 
+    def is_game_over(self):
+        players_alive = [player_id for player_id, units in self.players_to_units.items() if len(units) > 0]
+
+        if len(players_alive) == 1:
+            return True, players_alive[0]
+        
+        return False
+
     def get_game_state(self, player_id: int=0) -> GameState:
         """Get current game state according to `player_id`: Playing, Win, Lose, or Draw"""
         if len(self.units) == 0: return GameState.DRAW
