@@ -270,7 +270,7 @@ class DnDBoard():
         players_alive = [player_id for player_id, units in self.players_to_units.items() if len(units) > 0]
 
         if len(players_alive) == 1:
-            return True, players_alive[0]
+            return True
         
         return False
 
