@@ -10,12 +10,12 @@ from os import path
 if __name__ == '__main__':
     import sys
     sys.path.append( path.dirname( path.dirname( path.dirname( path.abspath(__file__)))))
-    from src.gui.adapters import RenderUnit 
+    from src.gui.RenderUnit import RenderUnit 
     from src.dnd.units import Unit
     from src.dnd.actions import *
     from src.utils.common import roll_avg
 else: 
-    from ..gui.adapters import RenderUnit
+    from ..gui.RenderUnit import RenderUnit
     from ..utils.common import roll_avg
     from .units import Unit
     from .actions import *
@@ -29,10 +29,11 @@ def load_unit(json_path:str, rollHP=False) -> Unit:
   battleStats = data['battleStats']
   CR = battleStats['CR']
   AC = battleStats['AC']
+  init = battleStats['init']
   HP = roll(battleStats['HP']) if rollHP else roll_avg(battleStats['HP'])
   cellSpeed = battleStats['speed']//5 #5 feet per cell
   attacks = data['battleStats']['attacks']
-  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, AC=AC, UID=None, CR = CR)
+  unit = Unit(name=getTokenName(json_path), health=HP, speed=cellSpeed, AC=AC, init=init, UID=None, CR = CR)
   
   for attack in attacks:
     if attack['type'] == 'meleeWeaponAttack':
@@ -65,7 +66,7 @@ def getTokenImagePath(json_path:str, gradio = False) -> Image:
     json_folder = 'Tokens'
   else:
     json_folder = path.dirname(path.abspath(json_path))
-  return json_folder+'\\'+data['tokenImage']
+  return json_folder+'/'+data['tokenImage']
 
 def getTokenName(json_path:str) -> str:
   data = parse_json(json_path)

@@ -58,13 +58,13 @@ def roll_avg(string:str) -> int:
   return math.ceil((roll_min(string) + roll_max(string))/2)
 
 def RGB_to_Hex(rgb:Tuple[int, int, int]) -> str:
-    print(f'{rgb=}')
+    # print(f'{rgb=}')
     hex = '#{:02x}{:02x}{:02x}'.format(*rgb)
-    print(f'{hex=}')
+    # print(f'{hex=}')
     return hex
 
 def Hex_to_RGB(hex:str):
-    print(f'{hex=}')
+    # print(f'{hex=}')
     rgb = tuple(int(hex.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
-    print(f'{rgb=}')
+    # print(f'{rgb=}')
     return rgb

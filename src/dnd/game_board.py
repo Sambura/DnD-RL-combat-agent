@@ -2,6 +2,7 @@ import numpy as np
 from enum import IntEnum
 import re
 from typing import List
+import itertools
 
 if __name__ == '__main__':
     import sys
@@ -48,12 +49,19 @@ class DnDBoard():
         self.current_movement_left = None
         self.reacted_list = []
         self.used_action = False
+        self.initialized:bool = False
+
+    def is_initialized(self) -> bool:
+        return self.initialized
 
     def get_UIDs(self) -> List[int]:
         return np.array([unit.get_UID() for unit in self.units])
 
     def get_unit_by_UID(self, UID:str) -> Unit:
-        return self.units[np.where(self.get_UIDs() == UID)[0][0]]
+        try:
+            return self.units[np.where(self.get_UIDs() == UID)[0][0]]
+        except IndexError:
+            return None
 
     def assign_UID(self, unit: Unit) -> None:
         """Assigns UID based on the name of the unit"""
@@ -61,6 +69,7 @@ class DnDBoard():
             raise Exception('tried to assign UID to None unit')
         if unit.UID is not None:
             raise Exception('tried to assign UID to unit that already has UID')
+        # print(self.get_UIDs())
         UIDs = self.get_UIDs().tolist() # tolist removes FutureWarning from numpy
         UID = unit.name
         splitted_label = list(filter(None, re.split(r'(\d+)', UID)))
@@ -72,7 +81,7 @@ class DnDBoard():
             UID = ''.join(splitted_label)
         unit.UID = UID
         
-    def place_unit(self, unit: Unit, position: IntPoint2d, player_index: int, replace: bool=False, generateUID:bool = True):
+    def place_unit(self, unit: Unit, position: IntPoint2d, player_index: int, replace: bool=False, generateUID:bool = False):
         """
         Places the given unit at specified position on the board
         If `replace` is False, raises an error on attempt to replace
@@ -88,11 +97,11 @@ class DnDBoard():
         if generateUID:
             self.assign_UID(unit)
         self._place_unit(unit, position, player_index)
-        self.units.append(unit) # for more interactivity in case it is needed
     
     def _place_unit(self, unit: Unit, position: IntPoint2d, player_index: int):
         """Implementation of place_unit(). Only use if you know what you are doing"""
         self.board[position] = unit    
+        self.units.append(unit) # for more interactivity in case it is needed
         if player_index not in self.players_to_units: self.players_to_units[player_index] = []
         self.players_to_units[player_index].append(unit)
         unit.pos = to_tuple(position)
@@ -103,13 +112,15 @@ class DnDBoard():
         return self.board[position] is not None
 
     def initialize_game(self, check_empty: bool=True):
-        #TODO: check UIDs for uniqueness
-        self.units = self.board[self.board != None].flatten().tolist()
+        self.initialized = True
+        self.units:List[Unit] = self.board[self.board != None].flatten().tolist()
         if check_empty and len(self.units) == 0:
             raise RuntimeError('The board is empty')
         
-        # Assign turn order
-        self.set_turn_order(random.sample(list(range(len(self.units))), len(self.units)))
+        turn_order = sorted(range(len(self.units)), key=lambda i : self.units[i].get_initiative(), reverse=True)
+        # turn_order = random.sample(list(range(len(self.units))), len(self.units))
+        # print(turn_order)
+        self.set_turn_order(turn_order)
         
     def set_turn_order(self, turn_order: list[Unit], current_index: int=0):
         self.turn_order = turn_order
@@ -176,7 +187,7 @@ class DnDBoard():
         reaction_list = self.get_reaction_list()
         for unit in reaction_list:
             if manhattan_distance(new_position, unit.pos) <= unit.melee_attack.range: continue
-            # TODO: Does reaction attack follow the same rules as a regular attack?
+            # TODO: Does reaction attack follow the same rules as a regular attack? Yes
             unit.melee_attack.invoke(self, source_unit=unit, target_unit=self.current_unit)
             self.reacted_list.append(unit)
 
@@ -196,11 +207,14 @@ class DnDBoard():
         either not performed, or an error is raised, depending on value of `raise_on_illegal`
         """
         if not self.check_action_legal(action, raise_on_illegal=raise_on_illegal): return False, None
-        action.invoke(self)
+        self.last_roll_info = action.invoke(self)
         updates = self.update_board()
         self.used_action = True
 
         return True, updates
+
+    def get_last_roll_info(self):
+        return self.last_roll_info
 
     def finish_turn(self) -> None:
         """Finish the current turn and move on to the next one"""
@@ -251,6 +265,14 @@ class DnDBoard():
             return False
         
         return True
+
+    def is_game_over(self):
+        players_alive = [player_id for player_id, units in self.players_to_units.items() if len(units) > 0]
+
+        if len(players_alive) == 1:
+            return True
+        
+        return False
 
     def get_game_state(self, player_id: int=0) -> GameState:
         """Get current game state according to `player_id`: Playing, Win, Lose, or Draw"""
