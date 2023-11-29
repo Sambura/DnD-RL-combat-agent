@@ -52,5 +52,5 @@ class GenericSoldier(Unit):
                  name_postfix: str="",
                  AC:int=10,
                  UID:int=None) -> None:
-        super().__init__(name + name_postfix, health, speed, AC, UID)
+        super().__init__(name + name_postfix, health, speed, AC, 0, UID)
         self.add_action(MeleeWeaponAttack(-1, attack_damage=attack_damage, range=range))
