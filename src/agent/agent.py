@@ -158,11 +158,11 @@ class DnDAgent():
                     agent.next_model = agent.eval_model
                 agent.optimizer = torch.optim.Adam(agent.eval_model.parameters())
         
-        agent.eval_model.load_state_dict(torch.load(os.path.join(path, f'eval_model.pt')))
+        agent.eval_model.load_state_dict(torch.load(os.path.join(path, f'eval_model.pt'), map_location=agent.device))
         if not strip:
-            agent.optimizer.load_state_dict(torch.load(os.path.join(path, f'optimizer.pt')))
+            agent.optimizer.load_state_dict(torch.load(os.path.join(path, f'optimizer.pt', map_location=agent.device)))
             if agent.dual_learning:
-                agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt')))
+                agent.next_model.load_state_dict(torch.load(os.path.join(path, f'next_model.pt', map_location=agent.device)))
         
         if strip:
             for x in agent.__dict__.copy():
@@ -277,6 +277,7 @@ class DnDAgent():
         if not hasattr(self, 'sequential_actions'): self.sequential_actions = False
         self.random_action_resolver = get_default_random_action_resolver(self.board_shape, self.out_channels, self.sequential_actions)
         if not hasattr(self, 'model_class'): self.model_class = DnDEvalModel # delete this line asap
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.eval_model = self.model_class(self.in_channels, self.out_channels).to(self.device).train()
         self.next_model = self.model_class(self.in_channels, self.out_channels).to(self.device).eval()
         self.optimizer = torch.optim.Adam(self.eval_model.parameters())
