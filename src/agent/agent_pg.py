@@ -1,5 +1,5 @@
 from .deep_q_network import DnDEvalModel
-from .agent import passthrough_filter, passthrough_masker
+from .agent import passthrough_masker
 from torch import nn
 import numpy as np
 import random
@@ -69,7 +69,7 @@ class DnDAgentPolicyGradient():
     def choose_action_vector(self, state):
         raise NotImplementedError()
     
-    def choose_single_action(self, state):
+    def predict_probabilities(self, state):
         with torch.no_grad():
             output = torch.flatten(self.model(torch.tensor(state).to(self.device).unsqueeze(0))[0])
 
@@ -83,14 +83,7 @@ class DnDAgentPolicyGradient():
         probabilities *= self.last_mask
         
         sum = np.sum(probabilities)
-        #if sum > 0:
         return probabilities / sum
-        # else:
-        #     print('+')
-        #     probabilities = output.detach().cpu().numpy().reshape(self.out_channels, *self.board_shape)
-        #     if filter: probabilities = self.legal_moves_filter(state, probabilities)
-        #     probabilities -= np.min(probabilities)
-        #     return probabilities / np.sum(probabilities)
 
     def choose_single_action(self, state):
         probabilities = self.predict_probabilities(state).reshape(-1)

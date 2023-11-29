@@ -19,6 +19,9 @@ def get_default_random_action_resolver(board_shape, out_channels, sequential_act
     
     return sequential_resolver if sequential_actions else resolver
 
+def passthrough_masker(state, ch_num):
+    return np.ones((ch_num, *state.shape[1:]))
+
 class Agent:
     def load_agent(path: str, strip: bool=False, **kwargs):
         """
@@ -160,7 +163,7 @@ class DnDAgent():
         if random.random() < self.epsilon:
             return self.random_action_resolver(state)
 
-        mask = self.legal_moves_masker(state, self.out_channels, self.board_shape)
+        mask = self.legal_moves_masker(state, self.out_channels)
         output = self.predict(state)
         output = self.apply_mask(output, mask)
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1), axis=1), output.shape[1:])
@@ -175,7 +178,7 @@ class DnDAgent():
             return self.random_action_resolver(state)
 
         output = self.predict(state)
-        mask = self.legal_moves_masker(state, self.out_channels, self.board_shape)
+        mask = self.legal_moves_masker(state, self.out_channels)
         output = self.apply_mask(output, mask)
 
         return np.unravel_index(np.argmax(output.reshape(output.shape[0], -1)), output.shape)
